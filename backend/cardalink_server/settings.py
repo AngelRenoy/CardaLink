@@ -13,6 +13,10 @@ DEBUG = os.getenv('NODE_ENV', 'development') != 'production'
 
 ALLOWED_HOSTS = ['*']
 
+# Reverse Proxy SSL Header for Render / Cloud deployments
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
