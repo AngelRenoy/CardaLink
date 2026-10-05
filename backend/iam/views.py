@@ -182,11 +182,22 @@ def login(request):
 @permission_classes([AllowAny])
 def initiate_google_auth(request):
     google_client_id = os.getenv('GOOGLE_CLIENT_ID', '')
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-    callback_url = os.getenv('GOOGLE_CALLBACK_URL', 'http://localhost:5000/api/auth/google/callback')
+    
+    origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
+    if origin and ('localhost' in origin or '127.0.0.1' in origin):
+        default_frontend = 'http://localhost:5173'
+    else:
+        default_frontend = 'https://carda-link.vercel.app'
+        
+    frontend_url = os.getenv('FRONTEND_URL', default_frontend).rstrip('/')
+    
+    default_callback = request.build_absolute_uri('/api/auth/google/callback')
+    if default_callback.startswith('http://') and 'onrender.com' in default_callback:
+        default_callback = default_callback.replace('http://', 'https://')
+    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
 
     if not google_client_id:
-        return redirect(f"{frontend_url}/login?error={urllib.parse.quote('Google OAuth Client ID is missing in backend/.env')}")
+        return redirect(f"{frontend_url}/login?error={urllib.parse.quote('Google OAuth Client ID is missing in backend Environment Variables')}")
 
     params = {
         'client_id': google_client_id,
@@ -204,10 +215,20 @@ def initiate_google_auth(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def handle_google_callback(request):
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
+    if origin and ('localhost' in origin or '127.0.0.1' in origin):
+        default_frontend = 'http://localhost:5173'
+    else:
+        default_frontend = 'https://carda-link.vercel.app'
+
+    frontend_url = os.getenv('FRONTEND_URL', default_frontend).rstrip('/')
     google_client_id = os.getenv('GOOGLE_CLIENT_ID', '')
     google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '')
-    callback_url = os.getenv('GOOGLE_CALLBACK_URL', 'http://localhost:5000/api/auth/google/callback')
+    
+    default_callback = request.build_absolute_uri('/api/auth/google/callback')
+    if default_callback.startswith('http://') and 'onrender.com' in default_callback:
+        default_callback = default_callback.replace('http://', 'https://')
+    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
 
     error_param = request.GET.get('error')
     if error_param:
