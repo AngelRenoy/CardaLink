@@ -181,7 +181,7 @@ def login(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def initiate_google_auth(request):
-    google_client_id = os.getenv('GOOGLE_CLIENT_ID', '')
+    google_client_id = os.getenv('GOOGLE_CLIENT_ID', '').strip()
     
     origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER') or ''
     if origin and ('localhost' in origin or '127.0.0.1' in origin):
@@ -194,7 +194,7 @@ def initiate_google_auth(request):
     default_callback = request.build_absolute_uri('/api/auth/google/callback')
     if default_callback.startswith('http://') and 'onrender.com' in default_callback:
         default_callback = default_callback.replace('http://', 'https://')
-    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
+    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback).strip()
 
     if not google_client_id:
         return redirect(f"{frontend_url}/login?error={urllib.parse.quote('Google OAuth Client ID is missing in backend Environment Variables')}")
@@ -203,7 +203,7 @@ def initiate_google_auth(request):
         'client_id': google_client_id,
         'redirect_uri': callback_url,
         'response_type': 'code',
-        'scope': 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+        'scope': 'openid email profile',
         'access_type': 'offline',
         'prompt': 'select_account',
     }
