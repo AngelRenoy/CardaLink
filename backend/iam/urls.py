@@ -1,0 +1,81 @@
+from django.urls import path
+from iam import views
+
+urlpatterns = [
+    # Health Check
+    path('health', views.health_check),
+
+    # Authentication Routes
+    path('auth/register', views.register),
+    path('auth/login', views.login),
+    path('auth/google', views.initiate_google_auth),
+    path('auth/google/callback', views.handle_google_callback),
+    path('auth/google/confirm-role', views.confirm_google_role),
+    path('auth/me', views.get_me),
+    path('auth/logout', views.logout),
+    path('auth/change-password', views.change_password),
+    path('auth/iam-test-farmer-inventory', views.iam_test_farmer_inventory),
+    path('auth/iam-test-admin-only', views.iam_test_admin_only),
+
+    # Admin Management Routes
+    path('admin/users', views.admin_get_users),
+    path('admin/users/<int:user_id>/status', views.admin_update_user_status),
+    path('admin/audit-logs', views.admin_get_audit_logs),
+    path('admin/dashboard/stats', views.admin_dashboard_stats),
+    path('admin/pending-approvals', views.admin_get_pending_approvals),
+    path('admin/plantations', views.admin_get_plantations),
+    path('admin/cardamom-varieties', views.admin_get_varieties),
+    path('admin/harvests', views.admin_get_harvests),
+    path('admin/inventory', views.admin_get_inventory),
+    path('admin/agrochemicals', views.admin_get_agrochemicals),
+    path('admin/irrigation', views.admin_get_irrigation),
+    path('admin/expenses', views.admin_get_expenses),
+    path('admin/sales', views.admin_get_sales),
+    path('admin/transactions', views.admin_get_transactions),
+    path('admin/export-orders', views.admin_get_export_orders),
+    path('admin/export-documents', views.admin_get_export_documents),
+    path('admin/shipments', views.admin_get_shipments),
+    path('admin/notifications', views.admin_get_notifications),
+    path('admin/reports', views.admin_get_reports),
+
+    # Farmer Routes
+    path('farmer/dashboard/stats', views.farmer_dashboard_stats),
+    path('farmer/harvest-cycles/active', views.farmer_get_active_harvest_cycle),
+    path('farmer/harvest-cycles/start', views.farmer_start_harvest_cycle),
+    path('farmer/harvest-cycles/<int:cycle_id>/daily', views.farmer_add_daily_harvest),
+    path('farmer/harvest-cycles/<int:cycle_id>/complete', views.farmer_complete_harvest_cycle),
+    path('farmer/harvest-cycles/history', views.farmer_get_harvest_history),
+    path('farmer/harvest-cycles/<int:cycle_id>/summary', views.farmer_get_cycle_summary_detail),
+    path('farmer/harvest-cycles/<int:cycle_id>/dry-kg', views.farmer_update_cycle_dry_kg),
+    path('farmer/harvests', views.farmer_harvest_list_create),
+    path('farmer/harvests/<int:harvest_id>', views.farmer_harvest_detail_update_delete),
+    path('farmer/harvests/summary', views.farmer_harvest_summary),
+    path('farmer/plantations', views.farmer_plantations_list_create),
+    path('farmer/varieties', views.farmer_varieties_list_create),
+    path('farmer/agrochemicals', views.farmer_agrochemicals_list_create),
+    path('farmer/irrigation', views.farmer_irrigation_list_create),
+    path('farmer/inventory', views.farmer_inventory_list_create),
+    path('farmer/expenses', views.farmer_expenses_list_create),
+    path('farmer/sales', views.farmer_sales_list),
+    path('farmer/transactions', views.farmer_transactions_list),
+    path('farmer/purchase-requests', views.trader_purchase_requests_list),
+    path('farmer/purchase-requests/<int:request_id>/action', views.respond_purchase_request),
+    path('farmer/reports', views.farmer_reports),
+
+    # Trader Routes
+    path('trader/dashboard/stats', views.trader_dashboard_stats),
+    path('trader/marketplace', views.trader_marketplace_list),
+    path('trader/marketplace/<str:listing_id>', views.trader_marketplace_detail),
+    path('trader/purchase-requests', views.trader_purchase_requests_list),
+    path('trader/purchase-requests/create', views.trader_create_purchase_request),
+    path('trader/purchase-requests/<int:request_id>/action', views.respond_purchase_request),
+    path('trader/purchase-history', views.trader_purchase_history),
+    path('trader/inventory', views.trader_inventory_list),
+    path('trader/sales', views.trader_sales_list_create),
+    path('trader/transactions', views.trader_transactions_list),
+    path('trader/export-supply', views.trader_export_supply_list_create),
+    path('trader/reports', views.trader_reports),
+    path('trader/notifications', views.trader_notifications),
+    path('trader/profile', views.trader_update_profile),
+]
+

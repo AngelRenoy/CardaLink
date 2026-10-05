@@ -1,0 +1,17 @@
+{
+  "name": "cardalink-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CardaLink – Smart Cardamom Plantation & Export Management System Root Launcher",
+  "scripts": {
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"green,cyan\" \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "db:init": "npm --prefix backend run db:init",
+    "build": "npm --prefix frontend run build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "concurrently": "^8.2.2"
+  }
+}
