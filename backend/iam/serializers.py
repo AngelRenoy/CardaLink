@@ -3,7 +3,7 @@ from iam.models import (
     User, AuditLog, CardamomVariety, Plantation, HarvestCycle, HarvestRecord, InventoryItem,
     AgrochemicalUsage, IrrigationRecord, ExpenseRecord, SaleRecord,
     TransactionRecord, ExportOrder, ExportDocument, ShipmentRecord, NotificationItem,
-    MarketplaceListing, PurchaseRequest, ExportSupplyRequest
+    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord
 )
 from iam.config import get_permissions_for_role
 
@@ -55,11 +55,12 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     owner_name = serializers.ReadOnlyField(source='owner.full_name')
     owner_role = serializers.ReadOnlyField(source='owner.role')
     source_farmer_name = serializers.ReadOnlyField(source='source_farmer.full_name')
+    source_trader_name = serializers.ReadOnlyField(source='source_trader.full_name')
     plantation_name = serializers.ReadOnlyField(source='plantation.name')
 
     class Meta:
         model = InventoryItem
-        fields = ['id', 'owner_id', 'owner_name', 'owner_role', 'source_farmer_id', 'source_farmer_name', 'plantation_id', 'plantation_name', 'variety', 'quantity_kg', 'unit', 'grade', 'purchase_price_per_kg', 'total_cost', 'status', 'batch_code', 'created_at']
+        fields = ['id', 'owner_id', 'owner_name', 'owner_role', 'source_farmer_id', 'source_farmer_name', 'source_trader_id', 'source_trader_name', 'plantation_id', 'plantation_name', 'variety', 'quantity_kg', 'unit', 'grade', 'purchase_price_per_kg', 'total_cost', 'status', 'batch_code', 'created_at']
 
 class AgrochemicalUsageSerializer(serializers.ModelSerializer):
     farmer_name = serializers.ReadOnlyField(source='farmer.full_name')
@@ -115,26 +116,60 @@ class TransactionRecordSerializer(serializers.ModelSerializer):
         model = TransactionRecord
         fields = ['id', 'transaction_code', 'sender_id', 'sender_name', 'receiver_id', 'receiver_name', 'amount', 'payment_method', 'status', 'created_at']
 
-class ExportOrderSerializer(serializers.ModelSerializer):
+class InternationalBuyerSerializer(serializers.ModelSerializer):
     exporter_name = serializers.ReadOnlyField(source='exporter.full_name')
 
     class Meta:
-        model = ExportOrder
-        fields = ['id', 'order_code', 'exporter_id', 'exporter_name', 'buyer_name', 'destination_country', 'cardamom_variety', 'quantity_kg', 'total_value_usd', 'order_date', 'status', 'created_at']
+        model = InternationalBuyer
+        fields = ['id', 'exporter_id', 'exporter_name', 'name', 'company_name', 'country', 'email', 'phone', 'address', 'created_at']
+
+class QualityRecordSerializer(serializers.ModelSerializer):
+    order_code = serializers.ReadOnlyField(source='export_order.order_code')
+
+    class Meta:
+        model = QualityRecord
+        fields = ['id', 'export_order_id', 'order_code', 'variety', 'grade', 'moisture_percentage', 'size_mm', 'color_appearance', 'quality_status', 'inspection_date', 'inspector_name', 'remarks', 'created_at']
+
+class PackagingRecordSerializer(serializers.ModelSerializer):
+    order_code = serializers.ReadOnlyField(source='export_order.order_code')
+
+    class Meta:
+        model = PackagingRecord
+        fields = ['id', 'export_order_id', 'order_code', 'packaging_type', 'number_of_packages', 'weight_per_package_kg', 'total_quantity_kg', 'packaging_date', 'batch_number', 'notes', 'created_at']
 
 class ExportDocumentSerializer(serializers.ModelSerializer):
     order_code = serializers.ReadOnlyField(source='export_order.order_code')
 
     class Meta:
         model = ExportDocument
-        fields = ['id', 'export_order_id', 'order_code', 'document_type', 'document_number', 'status', 'issued_date', 'created_at']
+        fields = ['id', 'export_order_id', 'order_code', 'document_type', 'document_name', 'document_number', 'file_url', 'status', 'issued_date', 'created_at']
 
 class ShipmentRecordSerializer(serializers.ModelSerializer):
     order_code = serializers.ReadOnlyField(source='export_order.order_code')
 
     class Meta:
         model = ShipmentRecord
-        fields = ['id', 'export_order_id', 'order_code', 'tracking_number', 'carrier', 'status', 'origin', 'destination', 'dispatch_date', 'estimated_delivery', 'created_at']
+        fields = ['id', 'export_order_id', 'order_code', 'tracking_number', 'carrier', 'shipping_method', 'status', 'origin', 'destination', 'dispatch_date', 'estimated_delivery', 'created_at']
+
+class ExportOrderSerializer(serializers.ModelSerializer):
+    exporter_name = serializers.ReadOnlyField(source='exporter.full_name')
+    buyer_company = serializers.ReadOnlyField(source='buyer.company_name')
+    quality_records = QualityRecordSerializer(many=True, read_only=True)
+    packaging_records = PackagingRecordSerializer(many=True, read_only=True)
+    documents = ExportDocumentSerializer(many=True, read_only=True)
+    shipments = ShipmentRecordSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ExportOrder
+        fields = [
+            'id', 'order_code', 'exporter_id', 'exporter_name', 'buyer_id', 'buyer_name',
+            'buyer_company', 'company_name', 'email', 'phone', 'address', 'destination_country',
+            'destination_port', 'shipment_method', 'expected_shipment_date', 'incoterms',
+            'inventory_item_id', 'cardamom_variety', 'grade', 'batch_code', 'quantity_kg',
+            'price_per_kg', 'total_value_usd', 'order_date', 'payment_method', 'payment_status',
+            'payment_reference', 'payment_date', 'notes', 'status', 'quality_records',
+            'packaging_records', 'documents', 'shipments', 'created_at', 'updated_at'
+        ]
 
 class NotificationItemSerializer(serializers.ModelSerializer):
     recipient_email = serializers.ReadOnlyField(source='recipient.email')
@@ -193,9 +228,31 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
 class ExportSupplyRequestSerializer(serializers.ModelSerializer):
     trader_name = serializers.ReadOnlyField(source='trader.full_name')
+    trader_email = serializers.ReadOnlyField(source='trader.email')
+    trader_phone = serializers.ReadOnlyField(source='trader.phone')
+    trader_location = serializers.SerializerMethodField()
     exporter_name = serializers.ReadOnlyField(source='exporter.full_name')
+    request_date = serializers.SerializerMethodField()
 
     class Meta:
         model = ExportSupplyRequest
-        fields = ['id', 'trader_id', 'trader_name', 'exporter_id', 'exporter_name', 'variety', 'quantity_kg', 'price_per_kg', 'notes', 'status', 'created_at', 'updated_at']
+        fields = [
+            'id', 'trader_id', 'trader_name', 'trader_email', 'trader_phone', 'trader_location', 'exporter_id',
+            'exporter_name', 'inventory_item_id', 'variety', 'grade', 'quantity_kg', 'price_per_kg',
+            'total_amount', 'batch_code', 'expected_supply_date', 'payment_method', 'payment_status',
+            'payment_reference', 'notes', 'received_at', 'completed_at', 'status', 'request_date',
+            'created_at', 'updated_at'
+        ]
+
+    def get_trader_location(self, obj):
+        if hasattr(obj.trader, 'location') and getattr(obj.trader, 'location'):
+            return str(getattr(obj.trader, 'location'))
+        return 'Kattappana, Idukki'
+
+    def get_request_date(self, obj):
+        if obj.created_at:
+            return obj.created_at.strftime('%d-%m-%Y')
+        return None
+
+
 

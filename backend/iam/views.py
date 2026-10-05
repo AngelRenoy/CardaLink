@@ -4,6 +4,7 @@ import secrets
 import urllib.parse
 import requests
 from django.db import connection, transaction
+from django.utils import timezone
 from django.shortcuts import redirect
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -15,7 +16,7 @@ from iam.models import (
     User, UserIdentity, AuditLog, CardamomVariety, Plantation, HarvestCycle, HarvestRecord,
     InventoryItem, AgrochemicalUsage, IrrigationRecord, ExpenseRecord,
     SaleRecord, TransactionRecord, ExportOrder, ExportDocument, ShipmentRecord, NotificationItem,
-    MarketplaceListing, PurchaseRequest, ExportSupplyRequest
+    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord
 )
 from iam.serializers import (
     UserSerializer, AuditLogSerializer, CardamomVarietySerializer, PlantationSerializer,
@@ -23,7 +24,8 @@ from iam.serializers import (
     IrrigationRecordSerializer, ExpenseRecordSerializer, SaleRecordSerializer,
     TransactionRecordSerializer, ExportOrderSerializer, ExportDocumentSerializer,
     ShipmentRecordSerializer, NotificationItemSerializer,
-    MarketplaceListingSerializer, PurchaseRequestSerializer, ExportSupplyRequestSerializer
+    MarketplaceListingSerializer, PurchaseRequestSerializer, ExportSupplyRequestSerializer,
+    InternationalBuyerSerializer, QualityRecordSerializer, PackagingRecordSerializer
 )
 
 from iam.config import get_permissions_for_role, PERMISSIONS
@@ -3056,18 +3058,1073 @@ def farmer_reports(request):
             'records': irrigation_list
         },
         'overall_summary': {
-            'total_plantations': total_plantations_cnt,
-            'total_fresh_harvest_kg': total_fresh,
-            'total_dry_harvest_kg': total_dry,
-            'total_inventory_kg': total_inventory_kg,
-            'total_sales_amount': total_sales_val,
-            'total_expenses_amount': total_expenses_val,
             'total_transactions_count': transactions_qs.count(),
             'gross_difference': gross_difference
         }
     }
 
     return send_response(status.HTTP_200_OK, 'Farmer reports fetched successfully', data)
+
+
+# ==============================================================================
+# EXPORTER & TRADER-EXPORT MODULE API VIEWS
+# ==============================================================================
+
+def check_trader_auth(request):
+    if not request.user or not request.user.is_authenticated:
+        return send_error(status.HTTP_401_UNAUTHORIZED, 'Authentication required')
+    if request.user.role != 'TRADER':
+        return send_error(status.HTTP_403_FORBIDDEN, 'IAM Authorization Error: Role [TRADER] required')
+    if request.user.status != 'APPROVED':
+        return send_error(status.HTTP_403_FORBIDDEN, 'Account approval required')
+    return None
+
+def check_exporter_auth(request):
+    if not request.user or not request.user.is_authenticated:
+        return send_error(status.HTTP_401_UNAUTHORIZED, 'Authentication required')
+    if request.user.role != 'EXPORTER':
+        return send_error(status.HTTP_403_FORBIDDEN, 'IAM Authorization Error: Role [EXPORTER] required')
+    if request.user.status != 'APPROVED':
+        return send_error(status.HTTP_403_FORBIDDEN, 'Account approval required')
+    return None
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def trader_get_exporters(request):
+    auth_err = check_trader_auth(request)
+    if auth_err: return auth_err
+
+    exporters = User.objects.filter(role='EXPORTER', status='APPROVED')
+    serializer = UserSerializer(exporters, many=True)
+    return send_response(status.HTTP_200_OK, 'Exporters loaded', {'exporters': serializer.data})
+
+@api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def trader_export_supply_list_create(request):
+    auth_err = check_trader_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    if request.method == 'GET':
+        qs = ExportSupplyRequest.objects.filter(trader=user).order_by('-created_at')
+        serializer = ExportSupplyRequestSerializer(qs, many=True)
+        return send_response(status.HTTP_200_OK, 'Export supply requests loaded', {'export_supplies': serializer.data})
+
+    elif request.method == 'POST':
+        data = request.data
+        exporter_id = data.get('exporter_id')
+        inventory_id = data.get('inventory_id')
+        variety = (data.get('variety') or '').strip()
+        grade = (data.get('grade') or 'AGEB 8mm').strip()
+        quantity_raw = data.get('quantity_kg')
+        price_raw = data.get('price_per_kg')
+        expected_supply_date = data.get('expected_supply_date')
+        notes = (data.get('notes') or '').strip()
+
+        if not exporter_id:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Please select an Exporter')
+        try:
+            exporter = User.objects.get(id=exporter_id, role='EXPORTER', status='APPROVED')
+        except User.DoesNotExist:
+            return send_error(status.HTTP_404_NOT_FOUND, 'Selected Exporter not found')
+
+        inventory_item = None
+        if inventory_id:
+            try:
+                inventory_item = InventoryItem.objects.get(id=inventory_id, owner=user)
+            except InventoryItem.DoesNotExist:
+                return send_error(status.HTTP_404_NOT_FOUND, 'Selected inventory item not found')
+
+        if not variety:
+            if inventory_item:
+                variety = inventory_item.variety
+            else:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Cardamom variety is required')
+
+        if inventory_item and not grade:
+            grade = inventory_item.grade
+
+        try:
+            qty = parse_decimal_safe(quantity_raw)
+            if qty is None or qty <= 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Quantity must be greater than 0')
+            if inventory_item and qty > inventory_item.quantity_kg:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Quantity cannot exceed available Trader inventory ({inventory_item.quantity_kg} KG)')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        try:
+            price = parse_decimal_safe(price_raw)
+            if price is None or price <= 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Price per KG must be greater than 0')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        parsed_date = None
+        if expected_supply_date:
+            try:
+                parsed_date = datetime.strptime(str(expected_supply_date), '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        total_amount = (qty * price).quantize(Decimal('0.01'))
+
+        batch_code = inventory_item.batch_code if inventory_item else f"TR-EXP-{user.id}-{int(datetime.now().timestamp())}"
+
+        export_request = ExportSupplyRequest.objects.create(
+            trader=user,
+            exporter=exporter,
+            inventory_item=inventory_item,
+            variety=variety,
+            grade=grade,
+            quantity_kg=qty,
+            price_per_kg=price,
+            total_amount=total_amount,
+            batch_code=batch_code,
+            expected_supply_date=parsed_date,
+            notes=notes,
+            status='PENDING'
+        )
+
+        # Notify Exporter
+        NotificationItem.objects.create(
+            recipient=exporter,
+            title='New Export Supply Request',
+            message=f"Trader {user.full_name} sent an export supply request #{export_request.id} for {qty} KG of {variety}.",
+            category='EXPORT_SUPPLY'
+        )
+
+        serializer = ExportSupplyRequestSerializer(export_request)
+        return send_response(status.HTTP_201_CREATED, 'Export supply request sent successfully', {'export_supply': serializer.data})
+
+# Exporter Dashboard Stats
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_dashboard_stats(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    orders_qs = ExportOrder.objects.filter(exporter=user)
+    supplies_qs = ExportSupplyRequest.objects.filter(exporter=user)
+    shipments_qs = ShipmentRecord.objects.filter(export_order__exporter=user)
+
+    total_orders = orders_qs.count()
+    pending_requests = supplies_qs.filter(status='PENDING').count()
+    accepted_orders = orders_qs.filter(status__in=['CONFIRMED', 'QUALITY_CHECK', 'QUALITY_APPROVED', 'PACKAGING', 'DOCUMENTS_PENDING']).count()
+    payment_pending = orders_qs.filter(payment_status='PENDING').count()
+    ready_for_shipment = orders_qs.filter(status='READY_FOR_SHIPMENT').count()
+    active_shipments = shipments_qs.filter(status__in=['PREPARING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT']).count()
+    completed_exports = orders_qs.filter(status='COMPLETED').count()
+
+    total_export_qty = float(orders_qs.filter(status='COMPLETED').aggregate(s=Sum('quantity_kg'))['s'] or Decimal('0.00'))
+    total_export_val = float(orders_qs.filter(status='COMPLETED').aggregate(s=Sum('total_value_usd'))['s'] or Decimal('0.00'))
+    pending_payments_val = float(orders_qs.filter(payment_status='PENDING').aggregate(s=Sum('total_value_usd'))['s'] or Decimal('0.00'))
+
+    return send_response(status.HTTP_200_OK, 'Exporter dashboard stats loaded', {
+        'stats': {
+            'total_export_orders': total_orders,
+            'pending_export_requests': pending_requests,
+            'accepted_orders': accepted_orders,
+            'payment_pending': payment_pending,
+            'ready_for_shipment': ready_for_shipment,
+            'active_shipments': active_shipments,
+            'completed_exports': completed_exports,
+            'total_export_quantity_kg': total_export_qty,
+            'total_export_value_usd': total_export_val,
+            'pending_payments_usd': pending_payments_val
+        }
+    })
+
+# Exporter Received Export Supply Requests List
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_export_supplies_list(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    qs = ExportSupplyRequest.objects.filter(Q(exporter=user) | Q(exporter__isnull=True)).order_by('-created_at')
+
+    status_filter = request.GET.get('status')
+    if status_filter:
+        qs = qs.filter(status=status_filter.upper())
+
+    search = request.GET.get('search')
+    if search:
+        qs = qs.filter(Q(trader__full_name__icontains=search) | Q(variety__icontains=search) | Q(batch_code__icontains=search))
+
+    serializer = ExportSupplyRequestSerializer(qs, many=True)
+    return send_response(status.HTTP_200_OK, 'Export supply requests loaded', {'export_supplies': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_export_supply_detail(request, request_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        req = ExportSupplyRequest.objects.get(id=request_id, exporter=user)
+    except ExportSupplyRequest.DoesNotExist:
+        try:
+            req = ExportSupplyRequest.objects.get(id=request_id, exporter__isnull=True)
+        except ExportSupplyRequest.DoesNotExist:
+            return send_error(status.HTTP_404_NOT_FOUND, 'Export supply request not found')
+
+    serializer = ExportSupplyRequestSerializer(req)
+    return send_response(status.HTTP_200_OK, 'Export supply request detail loaded', {'export_supply': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_export_supply_action(request, request_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        req = ExportSupplyRequest.objects.get(id=request_id)
+    except ExportSupplyRequest.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export supply request not found')
+
+    if req.exporter and req.exporter != user:
+        return send_error(status.HTTP_403_FORBIDDEN, 'Access denied to this export supply request')
+
+    action = (request.data.get('action') or '').strip().upper()
+    payment_method = (request.data.get('payment_method') or 'ONLINE').strip().upper()
+    payment_reference = (request.data.get('payment_reference') or '').strip()
+
+    if not action:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Action parameter is required')
+
+    with transaction.atomic():
+        if action == 'ACCEPT':
+            if req.status not in ['PENDING']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot ACCEPT request in status {req.status}')
+            req.exporter = user
+            req.status = 'ACCEPTED'
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Export Supply Request Accepted',
+                message=f"Exporter {user.full_name} accepted your export supply request #{req.id}.",
+                category='EXPORT_SUPPLY'
+            )
+
+        elif action == 'REJECT':
+            if req.status not in ['PENDING', 'ACCEPTED']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot REJECT request in status {req.status}')
+            req.status = 'REJECTED'
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Export Supply Request Rejected',
+                message=f"Exporter {user.full_name} rejected your export supply request #{req.id}.",
+                category='EXPORT_SUPPLY'
+            )
+
+        elif action == 'CANCEL':
+            if req.status in ['COMPLETED', 'RECEIVED']:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Cannot CANCEL completed export supply request')
+            req.status = 'CANCELLED'
+            req.save()
+
+        elif action == 'PAY':
+            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot PAY request in status {req.status}')
+
+            if payment_method not in ['ONLINE', 'DIRECT']:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Invalid payment method')
+
+            req.payment_method = payment_method
+            if payment_method == 'ONLINE':
+                ref = payment_reference or f"EXP-PAY-{secrets.token_hex(6).upper()}"
+                req.payment_status = 'PAID'
+                req.payment_reference = ref
+                req.status = 'READY_FOR_RECEIPT'
+            else:
+                req.payment_status = 'PENDING'
+                req.payment_reference = payment_reference or 'DIRECT_PAYMENT_PENDING'
+                req.status = 'PAYMENT_PENDING'
+
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Payment Processed for Export Supply',
+                message=f"Exporter {user.full_name} initiated {payment_method} payment for export supply #{req.id}.",
+                category='EXPORT_SUPPLY'
+            )
+
+        elif action in ['CONFIRM_PAYMENT', 'CONFIRM_DIRECT_PAYMENT']:
+            if req.status not in ['PAYMENT_PENDING', 'ACCEPTED']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot confirm payment for request in status {req.status}')
+
+            req.payment_status = 'PAID'
+            req.status = 'READY_FOR_RECEIPT'
+            if not req.payment_reference or req.payment_reference == 'DIRECT_PAYMENT_PENDING':
+                req.payment_reference = f"DIRECT-CONFIRMED-{secrets.token_hex(4).upper()}"
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Direct Payment Confirmed',
+                message=f"Exporter {user.full_name} confirmed direct payment for export supply #{req.id}.",
+                category='EXPORT_SUPPLY'
+            )
+
+        elif action in ['RECEIVE', 'MARK_RECEIVED', 'COMPLETE']:
+            if req.status in ['COMPLETED', 'RECEIVED']:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Stock has already been received/completed')
+
+            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING', 'PAID', 'READY_FOR_RECEIPT']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot receive stock in status {req.status}')
+
+            # Deduct inventory from Trader if source inventory exists
+            if req.inventory_item:
+                trader_inv = req.inventory_item
+                if trader_inv.quantity_kg < req.quantity_kg:
+                    return send_error(status.HTTP_400_BAD_REQUEST, f'Trader inventory insufficient. Available: {trader_inv.quantity_kg} KG')
+
+                trader_inv.quantity_kg -= req.quantity_kg
+                if trader_inv.quantity_kg <= 0:
+                    trader_inv.status = 'SOLD_OUT'
+                trader_inv.save()
+
+            # Create Exporter Inventory Item
+            exp_batch = f"EXP-INV-{req.id}-{int(datetime.now().timestamp())}"
+            InventoryItem.objects.create(
+                owner=user,
+                source_trader=req.trader,
+                variety=req.variety,
+                grade=req.grade,
+                quantity_kg=req.quantity_kg,
+                unit='KG',
+                purchase_price_per_kg=req.price_per_kg,
+                total_cost=req.total_amount,
+                status='AVAILABLE',
+                batch_code=exp_batch
+            )
+
+            # Record Transaction
+            tx_code = f"TX-EXP-{req.id}-{secrets.token_hex(4).upper()}"
+            TransactionRecord.objects.create(
+                transaction_code=tx_code,
+                sender=user,
+                receiver=req.trader,
+                amount=req.total_amount,
+                payment_method=req.payment_method,
+                status='SUCCESS'
+            )
+
+            now = timezone.now()
+            req.received_at = now
+            req.completed_at = now
+            req.status = 'COMPLETED'
+            req.payment_status = 'PAID'
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Export Supply Completed',
+                message=f"Exporter {user.full_name} received stock and completed export supply #{req.id}.",
+                category='EXPORT_SUPPLY'
+            )
+
+        else:
+            return send_error(status.HTTP_400_BAD_REQUEST, f'Unknown action: {action}')
+
+    serializer = ExportSupplyRequestSerializer(req)
+    return send_response(status.HTTP_200_OK, f'Export supply status updated to {req.status}', {'export_supply': serializer.data})
+
+# Exporter Inventory List & Create
+@api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_inventory_list_create(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    if request.method == 'GET':
+        qs = InventoryItem.objects.filter(owner=user).order_by('-created_at')
+        serializer = InventoryItemSerializer(qs, many=True)
+        return send_response(status.HTTP_200_OK, 'Exporter inventory loaded', {'inventory': serializer.data})
+
+    elif request.method == 'POST':
+        data = request.data
+        variety = (data.get('variety') or '').strip()
+        grade = (data.get('grade') or 'AGEB 8mm').strip()
+        qty_raw = data.get('quantity_kg')
+        price_raw = data.get('purchase_price_per_kg', 0)
+
+        if not variety:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Cardamom variety is required')
+
+        try:
+            qty = parse_decimal_safe(qty_raw)
+            if qty is None or qty <= 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Quantity must be greater than 0')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        try:
+            price = parse_decimal_safe(price_raw, default=Decimal('0.00'))
+            if price < 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Price per KG cannot be negative')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        total_cost = (qty * price).quantize(Decimal('0.01'))
+        batch_code = f"EXP-STOCK-{user.id}-{int(datetime.now().timestamp())}"
+
+        inv = InventoryItem.objects.create(
+            owner=user,
+            variety=variety,
+            grade=grade,
+            quantity_kg=qty,
+            unit='KG',
+            purchase_price_per_kg=price,
+            total_cost=total_cost,
+            status='AVAILABLE',
+            batch_code=batch_code
+        )
+
+        serializer = InventoryItemSerializer(inv)
+        return send_response(status.HTTP_201_CREATED, 'Exporter inventory item added', {'inventory': serializer.data})
+
+# International Buyers List & Create
+@api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_buyers_list_create(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    if request.method == 'GET':
+        buyers = InternationalBuyer.objects.filter(exporter=user).order_by('-created_at')
+        serializer = InternationalBuyerSerializer(buyers, many=True)
+        return send_response(status.HTTP_200_OK, 'International buyers loaded', {'buyers': serializer.data})
+
+    elif request.method == 'POST':
+        data = request.data
+        name = (data.get('name') or '').strip()
+        company_name = (data.get('company_name') or '').strip()
+        country = (data.get('country') or '').strip()
+        email = (data.get('email') or '').strip().lower()
+        phone = (data.get('phone') or '').strip()
+        address = (data.get('address') or '').strip()
+
+        if not name:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Buyer name is required')
+        if not company_name:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Company name is required')
+        if not country:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Country is required')
+        if not email:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Buyer email is required')
+
+        buyer = InternationalBuyer.objects.create(
+            exporter=user,
+            name=name,
+            company_name=company_name,
+            country=country,
+            email=email,
+            phone=phone,
+            address=address
+        )
+
+        serializer = InternationalBuyerSerializer(buyer)
+        return send_response(status.HTTP_201_CREATED, 'International buyer added', {'buyer': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_buyer_detail(request, buyer_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        buyer = InternationalBuyer.objects.get(id=buyer_id, exporter=user)
+    except InternationalBuyer.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Buyer not found')
+
+    orders = ExportOrder.objects.filter(exporter=user, buyer=buyer).order_by('-created_at')
+    orders_data = ExportOrderSerializer(orders, many=True).data
+    buyer_data = InternationalBuyerSerializer(buyer).data
+    buyer_data['orders'] = orders_data
+
+    return send_response(status.HTTP_200_OK, 'Buyer details loaded', {'buyer': buyer_data})
+
+# Export Orders List & Create
+@api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_orders_list_create(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    if request.method == 'GET':
+        orders = ExportOrder.objects.filter(exporter=user).order_by('-created_at')
+        serializer = ExportOrderSerializer(orders, many=True)
+        return send_response(status.HTTP_200_OK, 'Export orders loaded', {'orders': serializer.data})
+
+    elif request.method == 'POST':
+        data = request.data
+        buyer_id = data.get('buyer_id')
+        buyer_name = (data.get('buyer_name') or '').strip()
+        company_name = (data.get('company_name') or '').strip()
+        email = (data.get('email') or '').strip()
+        phone = (data.get('phone') or '').strip()
+        address = (data.get('address') or '').strip()
+        destination_country = (data.get('destination_country') or '').strip()
+        destination_port = (data.get('destination_port') or 'Dubai Port').strip()
+        shipment_method = (data.get('shipment_method') or 'SEA').strip()
+        expected_shipment_date = data.get('expected_shipment_date')
+        incoterms = (data.get('incoterms') or 'FOB').strip()
+
+        inventory_id = data.get('inventory_item_id')
+        variety = (data.get('variety') or '').strip()
+        grade = (data.get('grade') or 'AGEB 8mm').strip()
+        quantity_raw = data.get('quantity_kg')
+        price_raw = data.get('price_per_kg')
+        notes = (data.get('notes') or '').strip()
+
+        buyer = None
+        if buyer_id:
+            try:
+                buyer = InternationalBuyer.objects.get(id=buyer_id, exporter=user)
+                buyer_name = buyer.name
+                company_name = buyer.company_name
+                email = buyer.email
+                phone = buyer.phone
+                address = buyer.address
+                if not destination_country:
+                    destination_country = buyer.country
+            except InternationalBuyer.DoesNotExist:
+                pass
+
+        if not buyer_name:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Buyer name is required')
+        if not destination_country:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Destination country is required')
+
+        inventory_item = None
+        if inventory_id:
+            try:
+                inventory_item = InventoryItem.objects.get(id=inventory_id, owner=user)
+                if not variety: variety = inventory_item.variety
+                if not grade: grade = inventory_item.grade
+            except InventoryItem.DoesNotExist:
+                return send_error(status.HTTP_404_NOT_FOUND, 'Selected inventory item not found')
+
+        if not variety:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Cardamom variety is required')
+
+        try:
+            qty = parse_decimal_safe(quantity_raw)
+            if qty is None or qty <= 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Export quantity must be greater than 0')
+
+            if inventory_item and qty > inventory_item.quantity_kg:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Quantity exceeds available Exporter inventory ({inventory_item.quantity_kg} KG)')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        try:
+            price = parse_decimal_safe(price_raw)
+            if price is None or price <= 0:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Price per KG must be greater than 0')
+        except ValueError as e:
+            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
+
+        parsed_shipment_date = None
+        if expected_shipment_date:
+            try:
+                parsed_shipment_date = datetime.strptime(str(expected_shipment_date), '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        total_value = (qty * price).quantize(Decimal('0.01'))
+        order_code = f"EXP-ORD-{secrets.token_hex(4).upper()}"
+        batch_code = inventory_item.batch_code if inventory_item else f"EXP-BATCH-{int(datetime.now().timestamp())}"
+
+        with transaction.atomic():
+            if inventory_item:
+                inventory_item.quantity_kg -= qty
+                if inventory_item.quantity_kg <= 0:
+                    inventory_item.status = 'EXPORTED'
+                inventory_item.save()
+
+            order = ExportOrder.objects.create(
+                order_code=order_code,
+                exporter=user,
+                buyer=buyer,
+                buyer_name=buyer_name,
+                company_name=company_name,
+                email=email,
+                phone=phone,
+                address=address,
+                destination_country=destination_country,
+                destination_port=destination_port,
+                shipment_method=shipment_method,
+                expected_shipment_date=parsed_shipment_date,
+                incoterms=incoterms,
+                inventory_item=inventory_item,
+                cardamom_variety=variety,
+                grade=grade,
+                batch_code=batch_code,
+                quantity_kg=qty,
+                price_per_kg=price,
+                total_value_usd=total_value,
+                order_date=date.today(),
+                notes=notes,
+                status='CONFIRMED'
+            )
+
+        serializer = ExportOrderSerializer(order)
+        return send_response(status.HTTP_201_CREATED, 'Export order created successfully', {'order': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_detail(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    serializer = ExportOrderSerializer(order)
+    return send_response(status.HTTP_200_OK, 'Export order details loaded', {'order': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_status_update(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    new_status = (request.data.get('status') or '').strip().upper()
+    valid_statuses = ['DRAFT', 'CONFIRMED', 'QUALITY_CHECK', 'QUALITY_APPROVED', 'QUALITY_REJECTED', 'PACKAGING', 'DOCUMENTS_PENDING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED', 'COMPLETED', 'CANCELLED']
+
+    if new_status not in valid_statuses:
+        return send_error(status.HTTP_400_BAD_REQUEST, f'Invalid status: {new_status}')
+
+    order.status = new_status
+    order.save()
+
+    serializer = ExportOrderSerializer(order)
+    return send_response(status.HTTP_200_OK, f'Export order status updated to {new_status}', {'order': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_payment_update(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    payment_status = (request.data.get('payment_status') or 'PAID').strip().upper()
+    payment_method = (request.data.get('payment_method') or 'LETTER_OF_CREDIT').strip().upper()
+    payment_reference = (request.data.get('payment_reference') or '').strip()
+
+    if payment_status not in ['PENDING', 'PARTIAL', 'PAID']:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Invalid payment status')
+
+    order.payment_status = payment_status
+    order.payment_method = payment_method
+    if payment_reference:
+        order.payment_reference = payment_reference
+    if payment_status == 'PAID':
+        order.payment_date = date.today()
+
+    order.save()
+
+    serializer = ExportOrderSerializer(order)
+    return send_response(status.HTTP_200_OK, f'Export order payment status updated to {payment_status}', {'order': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_quality_create(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    data = request.data
+    moisture = data.get('moisture_percentage', 10.5)
+    size_mm = (data.get('size_mm') or '8mm').strip()
+    color = (data.get('color_appearance') or 'Deep Green').strip()
+    q_status = (data.get('quality_status') or 'APPROVED').strip().upper()
+    inspector = (data.get('inspector_name') or user.full_name).strip()
+    remarks = (data.get('remarks') or '').strip()
+
+    qr = QualityRecord.objects.create(
+        export_order=order,
+        variety=order.cardamom_variety,
+        grade=order.grade,
+        moisture_percentage=moisture,
+        size_mm=size_mm,
+        color_appearance=color,
+        quality_status=q_status,
+        inspection_date=date.today(),
+        inspector_name=inspector,
+        remarks=remarks
+    )
+
+    if q_status == 'APPROVED':
+        order.status = 'QUALITY_APPROVED'
+    else:
+        order.status = 'QUALITY_REJECTED'
+    order.save()
+
+    serializer = QualityRecordSerializer(qr)
+    return send_response(status.HTTP_201_CREATED, 'Quality record saved', {'quality_record': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_packaging_create(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    data = request.data
+    p_type = (data.get('packaging_type') or 'Vacuum Pack').strip()
+    num_packages = int(data.get('number_of_packages', 1))
+    weight_per_pkg = Decimal(str(data.get('weight_per_package_kg', 10)))
+    total_pkg_qty = (num_packages * weight_per_pkg).quantize(Decimal('0.01'))
+
+    if total_pkg_qty > order.quantity_kg:
+        return send_error(status.HTTP_400_BAD_REQUEST, f'Packaging total quantity ({total_pkg_qty} KG) exceeds order quantity ({order.quantity_kg} KG)')
+
+    pr = PackagingRecord.objects.create(
+        export_order=order,
+        packaging_type=p_type,
+        number_of_packages=num_packages,
+        weight_per_package_kg=weight_per_pkg,
+        total_quantity_kg=total_pkg_qty,
+        packaging_date=date.today(),
+        batch_number=order.batch_code,
+        notes=data.get('notes', '')
+    )
+
+    order.status = 'PACKAGING'
+    order.save()
+
+    serializer = PackagingRecordSerializer(pr)
+    return send_response(status.HTTP_201_CREATED, 'Packaging record saved', {'packaging_record': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_document_create(request, order_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    data = request.data
+    doc_type = (data.get('document_type') or 'Commercial Invoice').strip()
+    doc_name = (data.get('document_name') or doc_type).strip()
+    doc_number = (data.get('document_number') or f"DOC-{secrets.token_hex(4).upper()}").strip()
+    file_url = (data.get('file_url') or '').strip()
+
+    doc = ExportDocument.objects.create(
+        export_order=order,
+        document_type=doc_type,
+        document_name=doc_name,
+        document_number=doc_number,
+        file_url=file_url,
+        status='VERIFIED',
+        issued_date=date.today()
+    )
+
+    order.status = 'DOCUMENTS_PENDING'
+    order.save()
+
+    serializer = ExportDocumentSerializer(doc)
+    return send_response(status.HTTP_201_CREATED, 'Export document uploaded', {'document': serializer.data})
+
+@api_view(['GET', 'POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_shipment_list_create(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+
+    if request.method == 'GET':
+        shipments = ShipmentRecord.objects.filter(export_order__exporter=user).order_by('-created_at')
+        serializer = ShipmentRecordSerializer(shipments, many=True)
+        return send_response(status.HTTP_200_OK, 'Shipments loaded', {'shipments': serializer.data})
+
+    elif request.method == 'POST':
+        data = request.data
+        order_id = data.get('export_order_id')
+        carrier = (data.get('carrier') or 'Maersk Line').strip()
+        method = (data.get('shipping_method') or 'SEA').strip()
+        origin = (data.get('origin') or 'Cochin Port, India').strip()
+        destination = (data.get('destination') or '').strip()
+        dispatch_date = data.get('dispatch_date')
+        estimated_delivery = data.get('estimated_delivery')
+
+        try:
+            order = ExportOrder.objects.get(id=order_id, exporter=user)
+        except ExportOrder.DoesNotExist:
+            return send_error(status.HTTP_404_NOT_FOUND, 'Selected export order not found')
+
+        if not destination:
+            destination = f"{order.destination_port}, {order.destination_country}"
+
+        parsed_dispatch = date.today()
+        if dispatch_date:
+            try:
+                parsed_dispatch = datetime.strptime(str(dispatch_date), '%Y-%m-%d').date()
+            except ValueError: pass
+
+        parsed_delivery = parsed_dispatch + timedelta(days=14)
+        if estimated_delivery:
+            try:
+                parsed_delivery = datetime.strptime(str(estimated_delivery), '%Y-%m-%d').date()
+            except ValueError: pass
+
+        tracking_number = f"TRK-{secrets.token_hex(4).upper()}"
+
+        shipment = ShipmentRecord.objects.create(
+            export_order=order,
+            tracking_number=tracking_number,
+            carrier=carrier,
+            shipping_method=method,
+            origin=origin,
+            destination=destination,
+            dispatch_date=parsed_dispatch,
+            estimated_delivery=parsed_delivery,
+            status='READY_FOR_SHIPMENT'
+        )
+
+        order.status = 'READY_FOR_SHIPMENT'
+        order.save()
+
+        serializer = ShipmentRecordSerializer(shipment)
+        return send_response(status.HTTP_201_CREATED, 'Shipment created successfully', {'shipment': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_shipment_status_update(request, shipment_id):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        shipment = ShipmentRecord.objects.get(id=shipment_id, export_order__exporter=user)
+    except ShipmentRecord.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Shipment not found')
+
+    new_status = (request.data.get('status') or '').strip().upper()
+    valid_statuses = ['PREPARING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED']
+
+    if new_status not in valid_statuses:
+        return send_error(status.HTTP_400_BAD_REQUEST, f'Invalid status: {new_status}')
+
+    shipment.status = new_status
+    shipment.save()
+
+    order = shipment.export_order
+    if new_status == 'DELIVERED':
+        order.status = 'COMPLETED'
+    elif new_status in ['SHIPPED', 'IN_TRANSIT', 'ARRIVED']:
+        order.status = new_status
+    order.save()
+
+    serializer = ShipmentRecordSerializer(shipment)
+    return send_response(status.HTTP_200_OK, f'Shipment status updated to {new_status}', {'shipment': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_transactions_list(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    txs = TransactionRecord.objects.filter(Q(sender=user) | Q(receiver=user)).order_by('-created_at')
+    serializer = TransactionRecordSerializer(txs, many=True)
+    return send_response(status.HTTP_200_OK, 'Exporter transactions loaded', {'transactions': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_reports(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    period = request.GET.get('period', 'all')
+    today = date.today()
+
+    orders_qs = ExportOrder.objects.filter(exporter=user)
+    supplies_qs = ExportSupplyRequest.objects.filter(exporter=user)
+    shipments_qs = ShipmentRecord.objects.filter(export_order__exporter=user)
+
+    if period == 'today':
+        orders_qs = orders_qs.filter(order_date=today)
+        supplies_qs = supplies_qs.filter(created_at__date=today)
+    elif period == 'week':
+        start_of_week = today - timedelta(days=today.weekday())
+        orders_qs = orders_qs.filter(order_date__gte=start_of_week)
+        supplies_qs = supplies_qs.filter(created_at__date__gte=start_of_week)
+    elif period == 'month':
+        start_of_month = today.replace(day=1)
+        orders_qs = orders_qs.filter(order_date__gte=start_of_month)
+        supplies_qs = supplies_qs.filter(created_at__date__gte=start_of_month)
+    elif period == 'year':
+        start_of_year = today.replace(month=1, day=1)
+        orders_qs = orders_qs.filter(order_date__gte=start_of_year)
+        supplies_qs = supplies_qs.filter(created_at__date__gte=start_of_year)
+    elif period == 'custom':
+        s_date = request.GET.get('start_date')
+        e_date = request.GET.get('end_date')
+        if s_date:
+            orders_qs = orders_qs.filter(order_date__gte=s_date)
+            supplies_qs = supplies_qs.filter(created_at__date__gte=s_date)
+        if e_date:
+            orders_qs = orders_qs.filter(order_date__lte=e_date)
+            supplies_qs = supplies_qs.filter(created_at__date__lte=e_date)
+
+    total_orders_cnt = orders_qs.count()
+    completed_exports_cnt = orders_qs.filter(status='COMPLETED').count()
+    pending_exports_cnt = orders_qs.exclude(status__in=['COMPLETED', 'CANCELLED', 'QUALITY_REJECTED']).count()
+    total_qty_kg = float(orders_qs.aggregate(s=Sum('quantity_kg'))['s'] or Decimal('0.00'))
+    total_val_usd = float(orders_qs.aggregate(s=Sum('total_value_usd'))['s'] or Decimal('0.00'))
+    pending_payments_usd = float(orders_qs.filter(payment_status='PENDING').aggregate(s=Sum('total_value_usd'))['s'] or Decimal('0.00'))
+
+    active_shipments_cnt = shipments_qs.filter(status__in=['PREPARING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT']).count()
+    delivered_shipments_cnt = shipments_qs.filter(status='DELIVERED').count()
+
+    # Breakdown reports
+    country_breakdown = list(orders_qs.values('destination_country').annotate(count=Count('id'), total_qty=Sum('quantity_kg'), total_val=Sum('total_value_usd')).order_by('-total_val'))
+    variety_breakdown = list(orders_qs.values('cardamom_variety').annotate(count=Count('id'), total_qty=Sum('quantity_kg'), total_val=Sum('total_value_usd')).order_by('-total_val'))
+    grade_breakdown = list(orders_qs.values('grade').annotate(count=Count('id'), total_qty=Sum('quantity_kg'), total_val=Sum('total_value_usd')).order_by('-total_val'))
+    buyer_breakdown = list(orders_qs.values('buyer_name', 'company_name').annotate(count=Count('id'), total_qty=Sum('quantity_kg'), total_val=Sum('total_value_usd')).order_by('-total_val'))
+
+    orders_list = ExportOrderSerializer(orders_qs.order_by('-order_date', '-id'), many=True).data
+    shipments_list = ShipmentRecordSerializer(shipments_qs.order_by('-dispatch_date'), many=True).data
+
+    data = {
+        'overview': {
+            'total_export_orders': total_orders_cnt,
+            'completed_exports': completed_exports_cnt,
+            'pending_exports': pending_exports_cnt,
+            'total_export_quantity_kg': total_qty_kg,
+            'total_export_value_usd': total_val_usd,
+            'pending_payments_usd': pending_payments_usd,
+            'active_shipments': active_shipments_cnt,
+            'delivered_shipments': delivered_shipments_cnt
+        },
+        'reports': {
+            'country_wise': country_breakdown,
+            'variety_wise': variety_breakdown,
+            'grade_wise': grade_breakdown,
+            'buyer_wise': buyer_breakdown,
+            'orders': orders_list,
+            'shipments': shipments_list
+        }
+    }
+
+    return send_response(status.HTTP_200_OK, 'Exporter reports generated', data)
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_notifications(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    notifications = NotificationItem.objects.filter(Q(recipient=user) | Q(recipient__isnull=True)).order_by('-created_at')[:50]
+    serializer = NotificationItemSerializer(notifications, many=True)
+    return send_response(status.HTTP_200_OK, 'Notifications retrieved', {'notifications': serializer.data})
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_traders_list(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    traders = User.objects.filter(role='TRADER', status='APPROVED')
+    serializer = UserSerializer(traders, many=True)
+    return send_response(status.HTTP_200_OK, 'Traders loaded', {'traders': serializer.data})
+
+@api_view(['PUT'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_update_profile(request):
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    data = request.data
+
+    full_name = (data.get('full_name') or '').strip()
+    phone = (data.get('phone') or '').strip()
+
+    if full_name: user.full_name = full_name
+    if phone: user.phone = phone
+
+    user.save()
+
+    serializer = UserSerializer(user)
+    return send_response(status.HTTP_200_OK, 'Profile updated successfully', {'user': serializer.data})
+
 
 
 

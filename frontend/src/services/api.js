@@ -202,6 +202,41 @@ export const fetchFarmerReportsApi = (params = {}) => {
   return request(`/farmer/reports${query ? `?${query}` : ''}`);
 };
 
+// Exporter API Endpoints
+export const fetchTraderExportersApi = () => request('/trader/exporters');
+export const fetchExporterDashboardStatsApi = () => request('/exporter/dashboard/stats');
+export const fetchExporterExportSuppliesApi = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return request(`/exporter/export-supplies${query ? `?${query}` : ''}`);
+};
+export const fetchExporterExportSupplyDetailApi = (id) => request(`/exporter/export-supplies/${id}`);
+export const actionExporterExportSupplyApi = (requestId, action, payload = {}) => request(`/exporter/export-supplies/${requestId}/action`, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
+export const fetchExporterTradersApi = () => request('/exporter/traders');
+export const fetchExporterInventoryApi = () => request('/exporter/inventory');
+export const createExporterInventoryApi = (data) => request('/exporter/inventory', { method: 'POST', body: JSON.stringify(data) });
+export const fetchExporterBuyersApi = () => request('/exporter/buyers');
+export const createExporterBuyerApi = (data) => request('/exporter/buyers', { method: 'POST', body: JSON.stringify(data) });
+export const fetchExporterBuyerDetailApi = (id) => request(`/exporter/buyers/${id}`);
+export const fetchExporterOrdersApi = () => request('/exporter/orders');
+export const createExporterOrderApi = (data) => request('/exporter/orders', { method: 'POST', body: JSON.stringify(data) });
+export const fetchExporterOrderDetailApi = (id) => request(`/exporter/orders/${id}`);
+export const updateExporterOrderStatusApi = (id, status) => request(`/exporter/orders/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+export const updateExporterOrderPaymentApi = (id, payload) => request(`/exporter/orders/${id}/payment`, { method: 'POST', body: JSON.stringify(payload) });
+export const createExporterOrderQualityApi = (id, data) => request(`/exporter/orders/${id}/quality`, { method: 'POST', body: JSON.stringify(data) });
+export const createExporterOrderPackagingApi = (id, data) => request(`/exporter/orders/${id}/packaging`, { method: 'POST', body: JSON.stringify(data) });
+export const createExporterOrderDocumentApi = (id, data) => request(`/exporter/orders/${id}/documents`, { method: 'POST', body: JSON.stringify(data) });
+export const fetchExporterShipmentsApi = () => request('/exporter/shipments');
+export const createExporterShipmentApi = (data) => request('/exporter/shipments', { method: 'POST', body: JSON.stringify(data) });
+export const updateExporterShipmentStatusApi = (id, status) => request(`/exporter/shipments/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+export const fetchExporterTransactionsApi = () => request('/exporter/transactions');
+export const fetchExporterReportsApi = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return request(`/exporter/reports${query ? `?${query}` : ''}`);
+};
+export const fetchExporterNotificationsApi = () => request('/exporter/notifications');
+export const updateExporterProfileApi = (data) => request('/exporter/profile', { method: 'PUT', body: JSON.stringify(data) });
+
+
 
 
 

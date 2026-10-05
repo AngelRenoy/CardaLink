@@ -136,6 +136,7 @@ export const TraderDashboard = () => {
   const [sales, setSales] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [exportSupplies, setExportSupplies] = useState([]);
+  const [exporters, setExporters] = useState([]);
   const [reports, setReports] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -196,9 +197,13 @@ export const TraderDashboard = () => {
   });
 
   const [exportForm, setExportForm] = useState({
+    exporter_id: '',
+    inventory_id: '',
     variety: 'Njallani Gold',
+    grade: 'AGEB 8mm',
     quantity_kg: '',
     price_per_kg: '2400',
+    expected_supply_date: '',
     notes: ''
   });
 
@@ -257,8 +262,14 @@ export const TraderDashboard = () => {
         const res = await fetchTraderTransactionsApi();
         if (res.success) setTransactions(res.data.transactions || []);
       } else if (tab === 'export_supply') {
-        const res = await fetchTraderExportSuppliesApi();
-        if (res.success) setExportSupplies(res.data.export_supplies || []);
+        const [suppliesRes, expRes, invRes] = await Promise.all([
+          fetchTraderExportSuppliesApi().catch(() => ({ success: false })),
+          fetchTraderExportersApi().catch(() => ({ success: false })),
+          fetchTraderInventoryApi().catch(() => ({ success: false }))
+        ]);
+        if (suppliesRes.success) setExportSupplies(suppliesRes.data.export_supplies || []);
+        if (expRes.success) setExporters(expRes.data.exporters || []);
+        if (invRes.success) setInventory(invRes.data.inventory || []);
       } else if (tab === 'reports') {
         const res = await fetchTraderReportsApi();
         if (res.success) setReports(res.data.reports || null);
@@ -461,20 +472,31 @@ export const TraderDashboard = () => {
   // Submit Export Supply Offer
   const handleCreateExportSupplySubmit = async (e) => {
     e.preventDefault();
-    const qty = parseFloat(exportForm.quantity_kg);
+    if (!exportForm.exporter_id) return showNotification('error', 'Please select an Exporter');
 
-    if (isNaN(qty) || qty <= 0) return showNotification('error', 'Export supply quantity must be greater than 0 kg');
+    const qty = parseFloat(exportForm.quantity_kg);
+    const price = parseFloat(exportForm.price_per_kg);
+
+    if (isNaN(qty) || qty <= 0) return showNotification('error', 'Export supply quantity must be greater than 0 KG');
+    if (isNaN(price) || price <= 0) return showNotification('error', 'Price per KG must be greater than ₹0');
+
+    if (exportForm.inventory_id) {
+      const invItem = inventory.find(i => String(i.id) === String(exportForm.inventory_id));
+      if (invItem && qty > parseFloat(invItem.quantity_kg)) {
+        return showNotification('error', `Quantity cannot exceed available Trader inventory (${invItem.quantity_kg} KG)`);
+      }
+    }
 
     try {
       const res = await createTraderExportSupplyApi(exportForm);
       if (res.success) {
-        showNotification('success', `Export supply offer for ${exportForm.quantity_kg} kg ${exportForm.variety} submitted to Exporters!`);
+        showNotification('success', `Export supply request for ${exportForm.quantity_kg} KG ${exportForm.variety} sent to Exporter successfully!`);
         setShowCreateExportSupplyModal(false);
-        setExportForm({ variety: 'Njallani Gold', quantity_kg: '', price_per_kg: '2400', notes: '' });
+        setExportForm({ exporter_id: '', inventory_id: '', variety: 'Njallani Gold', grade: 'AGEB 8mm', quantity_kg: '', price_per_kg: '2400', expected_supply_date: '', notes: '' });
         loadTabContent('export_supply');
         loadDashboardData();
       } else {
-        showNotification('error', res.message || 'Failed to submit export supply');
+        showNotification('error', res.message || 'Failed to submit export supply request');
       }
     } catch (err) {
       showNotification('error', err.message);
@@ -1705,50 +1727,142 @@ export const TraderDashboard = () => {
       {/* ========================================================================= */}
       {showCreateExportSupplyModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '500px', padding: '1.75rem' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '520px', padding: '1.75rem', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>Offer Cardamom for Export</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>Send Export Supply Request</h3>
               <button onClick={() => setShowCreateExportSupplyModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748B' }}><X size={20} /></button>
             </div>
 
             <form onSubmit={handleCreateExportSupplySubmit}>
+              {/* EXPORTER SELECTION */}
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Cardamom Variety:</label>
-                <input
-                  type="text"
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Exporter *:</label>
+                <select
                   required
-                  value={exportForm.variety}
-                  onChange={(e) => setExportForm({ ...exportForm, variety: e.target.value })}
-                  style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
-                />
+                  value={exportForm.exporter_id}
+                  onChange={(e) => setExportForm({ ...exportForm, exporter_id: e.target.value })}
+                  style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', backgroundColor: '#FFF' }}
+                >
+                  <option value="">-- Select Approved Exporter --</option>
+                  {exporters.map(exp => (
+                    <option key={exp.id} value={exp.id}>{exp.full_name} ({exp.email})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* INVENTORY SELECTION */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Select Trader Inventory Item (Optional):</label>
+                <select
+                  value={exportForm.inventory_id}
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    const item = inventory.find(i => String(i.id) === String(selId));
+                    if (item) {
+                      setExportForm({
+                        ...exportForm,
+                        inventory_id: selId,
+                        variety: item.variety,
+                        grade: item.grade || 'AGEB 8mm',
+                        quantity_kg: exportForm.quantity_kg || String(item.quantity_kg)
+                      });
+                    } else {
+                      setExportForm({ ...exportForm, inventory_id: selId });
+                    }
+                  }}
+                  style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.88rem', backgroundColor: '#FFF' }}
+                >
+                  <option value="">-- Choose from available stock --</option>
+                  {inventory.filter(i => parseFloat(i.quantity_kg) > 0).map(inv => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.batch_code} | {inv.variety} ({inv.grade}) - {inv.quantity_kg} KG available
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Variety *:</label>
+                  <input
+                    type="text"
+                    required
+                    value={exportForm.variety}
+                    onChange={(e) => setExportForm({ ...exportForm, variety: e.target.value })}
+                    style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Grade *:</label>
+                  <input
+                    type="text"
+                    required
+                    value={exportForm.grade}
+                    onChange={(e) => setExportForm({ ...exportForm, grade: e.target.value })}
+                    style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Supply Quantity (KG) *:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={exportForm.quantity_kg}
+                    onChange={(e) => setExportForm({ ...exportForm, quantity_kg: e.target.value })}
+                    style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Price per KG (₹) *:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={exportForm.price_per_kg}
+                    onChange={(e) => setExportForm({ ...exportForm, price_per_kg: e.target.value })}
+                    style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
+                  />
+                </div>
+              </div>
+
+              {/* TOTAL AMOUNT CALCULATED DISPLAY */}
+              <div style={{ backgroundColor: '#FEF3C7', padding: '0.75rem 1rem', borderRadius: '10px', fontSize: '0.88rem', color: '#92400E', fontWeight: '900', marginBottom: '1rem', border: '1px solid #FDE68A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Total Amount (₹):</span>
+                <span style={{ fontSize: '1.1rem', color: '#D97706' }}>
+                  ₹{((parseFloat(exportForm.quantity_kg) || 0) * (parseFloat(exportForm.price_per_kg) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Export Quantity (KG):</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Expected Supply Date:</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={exportForm.quantity_kg}
-                  onChange={(e) => setExportForm({ ...exportForm, quantity_kg: e.target.value })}
+                  type="date"
+                  value={exportForm.expected_supply_date}
+                  onChange={(e) => setExportForm({ ...exportForm, expected_supply_date: e.target.value })}
                   style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
                 />
               </div>
 
               <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Target Price per KG (₹):</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Trader Note:</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={exportForm.price_per_kg}
-                  onChange={(e) => setExportForm({ ...exportForm, price_per_kg: e.target.value })}
+                  type="text"
+                  placeholder="Special packaging or quality remarks..."
+                  value={exportForm.notes}
+                  onChange={(e) => setExportForm({ ...exportForm, notes: e.target.value })}
                   style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem' }}
                 />
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button type="button" onClick={() => setShowCreateExportSupplyModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, backgroundColor: '#D97706', borderColor: '#D97706' }}>Submit Export Offer →</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1.5, backgroundColor: '#D97706', borderColor: '#D97706', fontWeight: '900' }}>[ Send Export Supply Request ]</button>
               </div>
             </form>
           </div>

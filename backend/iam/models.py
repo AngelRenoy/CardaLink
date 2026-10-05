@@ -138,6 +138,7 @@ class HarvestRecord(models.Model):
 class InventoryItem(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inventory_items')
     source_farmer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplied_inventories')
+    source_trader = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='trader_supplied_inventories')
     plantation = models.ForeignKey(Plantation, on_delete=models.SET_NULL, null=True, blank=True)
     variety = models.CharField(max_length=100)
     quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
@@ -222,37 +223,142 @@ class TransactionRecord(models.Model):
     class Meta:
         db_table = 'transaction_records'
 
-class ExportOrder(models.Model):
-    order_code = models.CharField(max_length=50, unique=True)
-    exporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='export_orders')
-    buyer_name = models.CharField(max_length=150)
-    destination_country = models.CharField(max_length=100)
-    cardamom_variety = models.CharField(max_length=100)
-    quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
-    total_value_usd = models.DecimalField(max_digits=12, decimal_places=2)
-    order_date = models.DateField()
-    status = models.CharField(max_length=30, default='PROCESSING')
+class InternationalBuyer(models.Model):
+    exporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='international_buyers')
+    name = models.CharField(max_length=150)
+    company_name = models.CharField(max_length=150)
+    country = models.CharField(max_length=100)
+    email = models.EmailField(max_length=255)
+    phone = models.CharField(max_length=30)
+    address = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        db_table = 'international_buyers'
+        ordering = ['-created_at']
+
+class ExportOrder(models.Model):
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('CONFIRMED', 'Confirmed'),
+        ('QUALITY_CHECK', 'Quality Check'),
+        ('QUALITY_APPROVED', 'Quality Approved'),
+        ('QUALITY_REJECTED', 'Quality Rejected'),
+        ('PACKAGING', 'Packaging'),
+        ('DOCUMENTS_PENDING', 'Documents Pending'),
+        ('READY_FOR_SHIPMENT', 'Ready for Shipment'),
+        ('SHIPPED', 'Shipped'),
+        ('IN_TRANSIT', 'In Transit'),
+        ('ARRIVED', 'Arrived'),
+        ('DELIVERED', 'Delivered'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    PAYMENT_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PARTIAL', 'Partial'),
+        ('PAID', 'Paid'),
+    ]
+
+    order_code = models.CharField(max_length=50, unique=True)
+    exporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='export_orders')
+    buyer = models.ForeignKey(InternationalBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name='export_orders')
+    buyer_name = models.CharField(max_length=150)
+    company_name = models.CharField(max_length=150, blank=True, null=True)
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone = models.CharField(max_length=30, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    destination_country = models.CharField(max_length=100)
+    destination_port = models.CharField(max_length=100, default='Dubai Port')
+    shipment_method = models.CharField(max_length=50, default='SEA')
+    expected_shipment_date = models.DateField(null=True, blank=True)
+    incoterms = models.CharField(max_length=50, default='FOB')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True)
+    cardamom_variety = models.CharField(max_length=100)
+    grade = models.CharField(max_length=50, default='AGEB 8mm')
+    batch_code = models.CharField(max_length=100, blank=True, null=True)
+    quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    price_per_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_value_usd = models.DecimalField(max_digits=12, decimal_places=2)
+    order_date = models.DateField()
+    payment_method = models.CharField(max_length=50, default='BANK_TRANSFER')
+    payment_status = models.CharField(max_length=30, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    payment_reference = models.CharField(max_length=255, blank=True, null=True)
+    payment_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='CONFIRMED')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
         db_table = 'export_orders'
+        ordering = ['-created_at']
+
+class QualityRecord(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+    export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='quality_records')
+    variety = models.CharField(max_length=100)
+    grade = models.CharField(max_length=50)
+    moisture_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    size_mm = models.CharField(max_length=50, default='8mm')
+    color_appearance = models.CharField(max_length=100, default='Deep Green')
+    quality_status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='APPROVED')
+    inspection_date = models.DateField()
+    inspector_name = models.CharField(max_length=150, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'quality_records'
+        ordering = ['-created_at']
+
+class PackagingRecord(models.Model):
+    export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='packaging_records')
+    packaging_type = models.CharField(max_length=100, default='Vacuum Pack')
+    number_of_packages = models.IntegerField()
+    weight_per_package_kg = models.DecimalField(max_digits=8, decimal_places=2)
+    total_quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    packaging_date = models.DateField()
+    batch_number = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'packaging_records'
+        ordering = ['-created_at']
 
 class ExportDocument(models.Model):
     export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='documents')
     document_type = models.CharField(max_length=100)
+    document_name = models.CharField(max_length=255, default='Document')
     document_number = models.CharField(max_length=100)
+    file_url = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=30, default='VERIFIED')
     issued_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'export_documents'
+        ordering = ['-created_at']
 
 class ShipmentRecord(models.Model):
+    STATUS_CHOICES = [
+        ('PREPARING', 'Preparing'),
+        ('READY_FOR_SHIPMENT', 'Ready for Shipment'),
+        ('SHIPPED', 'Shipped'),
+        ('IN_TRANSIT', 'In Transit'),
+        ('ARRIVED', 'Arrived'),
+        ('DELIVERED', 'Delivered'),
+    ]
     export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='shipments')
     tracking_number = models.CharField(max_length=100, unique=True)
     carrier = models.CharField(max_length=100)
-    status = models.CharField(max_length=30, default='IN_TRANSIT')
+    shipping_method = models.CharField(max_length=50, default='SEA')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='PREPARING')
     origin = models.CharField(max_length=100, default='Cochin Port, India')
     destination = models.CharField(max_length=100)
     dispatch_date = models.DateField()
@@ -261,6 +367,7 @@ class ShipmentRecord(models.Model):
 
     class Meta:
         db_table = 'shipment_records'
+        ordering = ['-created_at']
 
 class NotificationItem(models.Model):
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
@@ -356,16 +463,42 @@ class ExportSupplyRequest(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('ACCEPTED', 'Accepted'),
+        ('PAYMENT_PENDING', 'Payment Pending'),
+        ('PAID', 'Paid'),
+        ('READY_FOR_RECEIPT', 'Ready For Receipt'),
+        ('RECEIVED', 'Received'),
         ('REJECTED', 'Rejected'),
         ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    PAYMENT_METHOD_CHOICES = [
+        ('ONLINE', 'Pay Online'),
+        ('DIRECT', 'Pay Directly'),
+    ]
+
+    PAYMENT_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PAID', 'Paid'),
+        ('FAILED', 'Failed'),
     ]
 
     trader = models.ForeignKey(User, on_delete=models.CASCADE, related_name='export_supplies_as_trader')
     exporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='export_supplies_as_exporter')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True, related_name='export_supplies')
     variety = models.CharField(max_length=100)
+    grade = models.CharField(max_length=50, default='AGEB 8mm')
     quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
     price_per_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    batch_code = models.CharField(max_length=100, blank=True, null=True)
+    expected_supply_date = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES, default='ONLINE')
+    payment_status = models.CharField(max_length=30, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    payment_reference = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -373,4 +506,5 @@ class ExportSupplyRequest(models.Model):
     class Meta:
         db_table = 'export_supply_requests'
         ordering = ['-created_at']
+
 

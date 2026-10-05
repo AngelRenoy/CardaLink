@@ -29,6 +29,7 @@ build/
 # Testing & Logs
 playwright-report/
 test-results/
+scratch/
 *.log
 
 # IDE & OS
