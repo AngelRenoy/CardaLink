@@ -189,12 +189,17 @@ def initiate_google_auth(request):
     else:
         default_frontend = 'https://carda-link.vercel.app'
         
-    frontend_url = os.getenv('FRONTEND_URL', default_frontend).rstrip('/')
+    raw_frontend = os.getenv('FRONTEND_URL', default_frontend)
+    frontend_url = re.sub(r'[\r\n\s"]', '', raw_frontend).rstrip('/')
+    if not frontend_url.startswith('http://') and not frontend_url.startswith('https://'):
+        frontend_url = f"https://{frontend_url}"
     
     default_callback = request.build_absolute_uri('/api/auth/google/callback')
     if default_callback.startswith('http://') and 'onrender.com' in default_callback:
         default_callback = default_callback.replace('http://', 'https://')
-    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback).strip()
+    
+    raw_callback = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
+    callback_url = re.sub(r'[\r\n\s"]', '', raw_callback).strip()
 
     if not google_client_id:
         return redirect(f"{frontend_url}/login?error={urllib.parse.quote('Google OAuth Client ID is missing in backend Environment Variables')}")
@@ -221,14 +226,20 @@ def handle_google_callback(request):
     else:
         default_frontend = 'https://carda-link.vercel.app'
 
-    frontend_url = os.getenv('FRONTEND_URL', default_frontend).rstrip('/')
-    google_client_id = os.getenv('GOOGLE_CLIENT_ID', '')
-    google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '')
+    raw_frontend = os.getenv('FRONTEND_URL', default_frontend)
+    frontend_url = re.sub(r'[\r\n\s"]', '', raw_frontend).rstrip('/')
+    if not frontend_url.startswith('http://') and not frontend_url.startswith('https://'):
+        frontend_url = f"https://{frontend_url}"
+
+    google_client_id = os.getenv('GOOGLE_CLIENT_ID', '').strip()
+    google_client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '').strip()
     
     default_callback = request.build_absolute_uri('/api/auth/google/callback')
     if default_callback.startswith('http://') and 'onrender.com' in default_callback:
         default_callback = default_callback.replace('http://', 'https://')
-    callback_url = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
+    
+    raw_callback = os.getenv('GOOGLE_CALLBACK_URL', default_callback)
+    callback_url = re.sub(r'[\r\n\s"]', '', raw_callback).strip()
 
     error_param = request.GET.get('error')
     if error_param:
@@ -253,7 +264,13 @@ def handle_google_callback(request):
         )
 
         if token_resp.status_code != 200:
-            return redirect(f"{frontend_url}/login?error={urllib.parse.quote('Failed to exchange authorization code with Google')}")
+            print('[Google Token Exchange Error]:', token_resp.status_code, token_resp.text)
+            err_msg = 'Failed to exchange authorization code with Google'
+            try:
+                err_detail = token_resp.json().get('error_description')
+                if err_detail: err_msg = f"Google OAuth Error: {err_detail}"
+            except Exception: pass
+            return redirect(f"{frontend_url}/login?error={urllib.parse.quote(err_msg)}")
 
         token_data = token_resp.json()
         access_token = token_data.get('access_token')
