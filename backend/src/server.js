@@ -7,6 +7,7 @@ const db = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
+const traderRoutes = require('./routes/traderRoutes');
 const { authRateLimiter } = require('./middleware/rateLimiterMiddleware');
 const { sendError } = require('./utils/responseHandler');
 
@@ -72,6 +73,7 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRateLimiter, authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/farmer', farmerRoutes);
+app.use('/api/trader', traderRoutes);
 
 
 // 404 Handler
