@@ -581,6 +581,8 @@ export const ExporterDashboard = () => {
               {/* STATS GRID */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
                 {[
+                  { label: 'Total International Buyers', val: stats?.total_international_buyers || buyers.length, color: '#1B4D2E', bg: '#E8F5E9' },
+                  { label: 'Active Buyers', val: buyers.length, color: '#059669', bg: '#ECFDF5' },
                   { label: 'Total Export Orders', val: stats?.total_export_orders || 0, color: '#1B4D2E', bg: '#E8F5E9' },
                   { label: 'Pending Export Requests', val: stats?.pending_export_requests || 0, color: '#D97706', bg: '#FEF3C7' },
                   { label: 'Accepted Orders', val: stats?.accepted_orders || 0, color: '#0284C7', bg: '#E0F2FE' },
@@ -1490,24 +1492,29 @@ export const ExporterDashboard = () => {
             <form onSubmit={handleCreateOrderSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2D3748', display: 'block', marginBottom: '0.35rem' }}>Select Buyer</label>
-                <select value={orderForm.buyer_id} onChange={e => {
-                  const bId = e.target.value;
-                  const b = buyers.find(x => x.id === parseInt(bId));
-                  if (b) {
-                    setOrderForm({
-                      ...orderForm,
-                      buyer_id: bId, buyer_name: b.name, company_name: b.company_name,
-                      email: b.email, phone: b.phone, address: b.address, destination_country: b.country
-                    });
-                  } else {
-                    setOrderForm({ ...orderForm, buyer_id: bId });
-                  }
-                }} style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
-                  <option value="">-- Manual Buyer Input --</option>
-                  {buyers.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.company_name} - {b.country})</option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select value={orderForm.buyer_id} onChange={e => {
+                    const bId = e.target.value;
+                    const b = buyers.find(x => x.id === parseInt(bId));
+                    if (b) {
+                      setOrderForm({
+                        ...orderForm,
+                        buyer_id: bId, buyer_name: b.name, company_name: b.company_name,
+                        email: b.email, phone: b.phone, address: b.address, destination_country: b.country
+                      });
+                    } else {
+                      setOrderForm({ ...orderForm, buyer_id: bId });
+                    }
+                  }} style={{ flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                    <option value="">-- Manual Buyer Input --</option>
+                    {buyers.map(b => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.company_name} - {b.country})</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => { setShowCreateOrderModal(false); setShowAddBuyerModal(true); }} style={{ backgroundColor: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7', padding: '0.6rem', borderRadius: '10px', fontWeight: '900', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    + Add New Buyer
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -1556,6 +1563,11 @@ export const ExporterDashboard = () => {
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2D3748', display: 'block', marginBottom: '0.35rem' }}>Price per KG ($ USD) *</label>
                 <input type="number" step="0.01" min="0.01" required placeholder="e.g. 32.50" value={orderForm.price_per_kg} onChange={e => setOrderForm({ ...orderForm, price_per_kg: e.target.value })} style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid #CBD5E1' }} />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1', backgroundColor: '#F8FAF8', padding: '0.8rem 1.25rem', borderRadius: '10px', border: '1px solid #E5EBE5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#718096' }}>Total Export Value:</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: '900', color: '#1B4D2E' }}>${(parseFloat(orderForm.quantity_kg || 0) * parseFloat(orderForm.price_per_kg || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
@@ -1663,7 +1675,51 @@ export const ExporterDashboard = () => {
         </div>
       )}
 
-      {/* MODAL 8: CREATE SHIPMENT */}
+      {/* MODAL 8: BUYER DETAIL (HISTORY) */}
+      {showBuyerDetailModal && selectedBuyerDetail && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '600px', padding: '1.75rem', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1B4D2E', margin: 0 }}>Buyer Details</h3>
+              <button onClick={() => setShowBuyerDetailModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#718096' }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ backgroundColor: '#F8FAF8', borderRadius: '12px', padding: '1.25rem', border: '1px solid #E5EBE5', fontSize: '0.85rem', lineHeight: 1.8, marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1A202C', marginBottom: '0.2rem' }}>{selectedBuyerDetail.company_name}</div>
+              <div style={{ color: '#2E7D32', fontWeight: '800', marginBottom: '0.5rem', fontSize: '0.9rem' }}>{selectedBuyerDetail.name} • {selectedBuyerDetail.country}</div>
+              <div><strong>Email:</strong> {selectedBuyerDetail.email}</div>
+              <div><strong>Phone:</strong> {selectedBuyerDetail.phone}</div>
+              <div><strong>Address:</strong> {selectedBuyerDetail.address}</div>
+            </div>
+
+            <h4 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1B4D2E', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Layers size={18} /> EXPORT HISTORY
+            </h4>
+            {(!selectedBuyerDetail.orders || selectedBuyerDetail.orders.length === 0) ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: '#718096', backgroundColor: '#F8FAF8', borderRadius: '12px', fontSize: '0.85rem', border: '1px dashed #CBD5E1' }}>
+                No export history found for this buyer.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {selectedBuyerDetail.orders.map(hist => (
+                  <div key={hist.id} style={{ backgroundColor: '#F8FAF8', borderRadius: '12px', padding: '1rem', border: '1px solid #E5EBE5' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                      <span style={{ fontWeight: '900', color: '#1A202C', fontSize: '0.95rem' }}>{hist.order_code}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800', padding: '0.3rem 0.75rem', borderRadius: '8px', backgroundColor: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}>{hist.status}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#4A5568', fontWeight: '600' }}>{hist.cardamom_variety} • {hist.quantity_kg} KG</div>
+                    <div style={{ fontSize: '1rem', fontWeight: '900', color: '#059669', marginTop: '0.5rem' }}>
+                      ${parseFloat(hist.total_export_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: CREATE SHIPMENT */}
       {showShipmentModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
           <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '520px', padding: '1.75rem' }}>

@@ -1743,10 +1743,20 @@ export const TraderDashboard = () => {
                   onChange={(e) => setExportForm({ ...exportForm, exporter_id: e.target.value })}
                   style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', backgroundColor: '#FFF' }}
                 >
-                  <option value="">-- Select Approved Exporter --</option>
-                  {exporters.map(exp => (
-                    <option key={exp.id} value={exp.id}>{exp.full_name} ({exp.email})</option>
-                  ))}
+                  {loading ? (
+                    <option value="">Loading approved exporters...</option>
+                  ) : (!exporters || exporters.length === 0) ? (
+                    <option value="">No approved exporters available</option>
+                  ) : (
+                    <>
+                      <option value="">-- Select Approved Exporter --</option>
+                      {exporters.map(exp => (
+                        <option key={exp.id} value={exp.id}>
+                          {exp.name || exp.full_name} — Exporter
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 

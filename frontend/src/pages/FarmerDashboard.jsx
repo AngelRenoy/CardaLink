@@ -162,6 +162,7 @@ export const FarmerDashboard = () => {
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [recordsSubTab, setRecordsSubTab] = useState('sales');
   const [prStatusFilter, setPrStatusFilter] = useState('');
+  const [inventoryStatusFilter, setInventoryStatusFilter] = useState('IN_STOCK');
 
   // Reports & Analytics States
   const [reportsData, setReportsData] = useState(null);
@@ -810,7 +811,7 @@ export const FarmerDashboard = () => {
     { id: 'fertilizer', label: 'Fertilizer & Pesticide', icon: FlaskConical },
     { id: 'irrigation', label: 'Irrigation', icon: Droplets, badge: 'Due', badgeType: 'due' },
     { id: 'harvest', label: 'Harvest', icon: Wheat, badge: activeCycle ? 1 : 0 },
-    { id: 'inventory', label: 'Inventory', icon: Boxes, badge: inventory.length },
+    { id: 'inventory', label: 'Inventory', icon: Boxes, badge: inventory.filter(i => (parseFloat(i.quantity_kg) || 0) > 0 && i.status !== 'SOLD').length },
     { id: 'purchase_requests', label: 'Purchase Requests', icon: ShoppingCart, badge: purchaseRequests.filter(r => r.status === 'PENDING').length },
     { id: 'records', label: 'Sales & Ledger', icon: Receipt },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
@@ -1758,39 +1759,109 @@ export const FarmerDashboard = () => {
 
           {activeTab === 'inventory' && (
             <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', padding: '1.5rem', border: '1px solid #E5EBE5' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#1B4D2E', margin: 0 }}>My Inventory Stock</h2>
-                <button onClick={() => setShowAddInventoryModal(true)} style={{ backgroundColor: '#43A047', color: '#FFF', border: 'none', padding: '0.5rem 1rem', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }}>
-                  + Update Inventory
-                </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#1B4D2E', margin: 0 }}>My Inventory Stock</h2>
+                  <p style={{ fontSize: '0.82rem', color: '#718096', margin: '0.2rem 0 0' }}>Manage and track your available cardamom stock batches.</p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: '#F1F5F9', padding: '0.25rem', borderRadius: '10px' }}>
+                    {[
+                      { key: 'IN_STOCK', label: 'IN STOCK' },
+                      { key: 'SOLD', label: 'SOLD' },
+                      { key: 'ALL', label: 'ALL ITEMS' }
+                    ].map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => setInventoryStatusFilter(f.key)}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: '800',
+                          border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: inventoryStatusFilter === f.key ? '#FFFFFF' : 'transparent',
+                          color: inventoryStatusFilter === f.key ? '#2E7D32' : '#64748B',
+                          boxShadow: inventoryStatusFilter === f.key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button onClick={() => setShowAddInventoryModal(true)} style={{ backgroundColor: '#43A047', color: '#FFF', border: 'none', padding: '0.5rem 1rem', borderRadius: '10px', fontWeight: '800', cursor: 'pointer' }}>
+                    + Update Inventory
+                  </button>
+                </div>
               </div>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#F8FAF8', borderBottom: '1px solid #E5EBE5' }}>
-                    <th style={{ padding: '0.75rem' }}>Batch Code</th>
-                    <th style={{ padding: '0.75rem' }}>Variety</th>
-                    <th style={{ padding: '0.75rem' }}>Grade</th>
-                    <th style={{ padding: '0.75rem' }}>Quantity</th>
-                    <th style={{ padding: '0.75rem' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.map(inv => (
-                    <tr key={inv.id} style={{ borderBottom: '1px solid #F4F7F4' }}>
-                      <td style={{ padding: '0.75rem', fontWeight: '800', color: '#1B4D2E' }}>{inv.batch_code}</td>
-                      <td style={{ padding: '0.75rem' }}>{inv.variety}</td>
-                      <td style={{ padding: '0.75rem' }}>{inv.grade}</td>
-                      <td style={{ padding: '0.75rem', fontWeight: '900', color: '#2E7D32' }}>{inv.quantity_kg} {inv.unit}</td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <span style={{ backgroundColor: '#E8F5E9', color: '#2E7D32', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: '800', fontSize: '0.75rem' }}>
-                          {inv.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {(() => {
+                const filteredInventory = inventory.filter(inv => {
+                  const qty = parseFloat(inv.quantity_kg) || 0;
+                  const isSold = inv.status === 'SOLD' || qty === 0;
+                  if (inventoryStatusFilter === 'IN_STOCK') return !isSold;
+                  if (inventoryStatusFilter === 'SOLD') return isSold;
+                  return true;
+                });
+
+                if (filteredInventory.length === 0) {
+                  return (
+                    <div style={{ padding: '3rem', textAlign: 'center', color: '#718096', fontSize: '0.9rem' }}>
+                      {inventoryStatusFilter === 'IN_STOCK'
+                        ? 'No active in-stock inventory items found. Click "+ Update Inventory" to add new stock.'
+                        : 'No inventory items found matching this filter.'}
+                    </div>
+                  );
+                }
+
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#F8FAF8', borderBottom: '1px solid #E5EBE5' }}>
+                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Batch Code</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Variety</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Grade</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Quantity</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInventory.map(inv => {
+                        const qty = parseFloat(inv.quantity_kg) || 0;
+                        const isSold = inv.status === 'SOLD' || qty === 0;
+                        return (
+                          <tr key={inv.id} style={{ borderBottom: '1px solid #F4F7F4' }}>
+                            <td style={{ padding: '0.75rem', fontWeight: '800', color: '#1B4D2E' }}>{inv.batch_code}</td>
+                            <td style={{ padding: '0.75rem' }}>{inv.variety}</td>
+                            <td style={{ padding: '0.75rem' }}>{inv.grade}</td>
+                            <td style={{ padding: '0.75rem', fontWeight: '900', color: isSold ? '#94A3B8' : '#2E7D32' }}>
+                              {inv.quantity_kg} {inv.unit}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span
+                                style={{
+                                  backgroundColor: isSold ? '#F1F5F9' : '#E8F5E9',
+                                  color: isSold ? '#64748B' : '#2E7D32',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontWeight: '800',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                {inv.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
             </div>
           )}
 

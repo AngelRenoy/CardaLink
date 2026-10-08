@@ -85,4 +85,16 @@ router.get('/marketplace', async (req, res) => {
   }
 });
 
+// GET /api/trader/exporters
+router.get('/exporters', requireRole('TRADER'), async (req, res) => {
+  try {
+    const exportersRes = await db.query(
+      "SELECT id, full_name as name, email, phone FROM users WHERE role = 'EXPORTER' AND status = 'APPROVED'"
+    );
+    sendSuccess(res, 200, 'Exporters loaded', { exporters: exportersRes.rows });
+  } catch (err) {
+    sendError(res, 500, err.message);
+  }
+});
+
 module.exports = router;
