@@ -360,24 +360,81 @@ export const TraderDashboard = () => {
   };
 
   // Submit Online Payment
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleTraderSubmitOnlinePayment = async (e) => {
     e.preventDefault();
     if (!selectedPaymentRequest) return;
-    try {
-      const res = await actionPurchaseRequestApi(selectedPaymentRequest.id, 'PAY_ONLINE', {
-        payment_reference: paymentRefInput
-      });
-      if (res.success) {
-        showNotification('success', 'Payment Successful! Stock is marked Ready for Pickup.');
-        setShowPaymentModal(false);
-        setSelectedPaymentRequest(null);
-        loadTabContent('requests');
-        loadDashboardData();
-      } else {
-        showNotification('error', res.message || 'Online payment failed');
+    
+    if (paymentModeInput === 'UPI') {
+      const resLoad = await loadRazorpayScript();
+      if (!resLoad) {
+        showNotification('error', 'Razorpay SDK failed to load. Are you online?');
+        return;
       }
-    } catch (err) {
-      showNotification('error', err.message || 'Error executing online payment');
+
+      const amount = parseFloat(selectedPaymentRequest.total_amount) * 100; // in paise
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
+        amount: amount.toString(),
+        currency: "INR",
+        name: "CardaLink",
+        description: "Cardamom Purchase Payment",
+        handler: async function (response) {
+           try {
+             const resApi = await actionPurchaseRequestApi(selectedPaymentRequest.id, 'PAY_ONLINE', {
+               payment_reference: response.razorpay_payment_id
+             });
+             if (resApi.success) {
+               showNotification('success', 'Payment Successful! Stock is marked Ready for Pickup.');
+               setShowPaymentModal(false);
+               setSelectedPaymentRequest(null);
+               loadTabContent('requests');
+               loadDashboardData();
+             } else {
+               showNotification('error', resApi.message || 'Online payment failed in backend');
+             }
+           } catch (err) {
+             showNotification('error', err.message || 'Error executing online payment');
+           }
+        },
+        prefill: {
+          name: "Trader CardaLink",
+          email: "trader@cardalink.com",
+          contact: "9999999999"
+        },
+        theme: {
+          color: "#059669"
+        }
+      };
+      
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
+    } else {
+      try {
+        const res = await actionPurchaseRequestApi(selectedPaymentRequest.id, 'PAY_ONLINE', {
+          payment_reference: paymentRefInput
+        });
+        if (res.success) {
+          showNotification('success', 'Payment Successful! Stock is marked Ready for Pickup.');
+          setShowPaymentModal(false);
+          setSelectedPaymentRequest(null);
+          loadTabContent('requests');
+          loadDashboardData();
+        } else {
+          showNotification('error', res.message || 'Online payment failed');
+        }
+      } catch (err) {
+        showNotification('error', err.message || 'Error executing online payment');
+      }
     }
   };
 
@@ -1594,17 +1651,19 @@ export const TraderDashboard = () => {
                 </select>
               </div>
 
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Gateway Reference / Transaction ID:</label>
-                <input
-                  type="text"
-                  required
-                  value={paymentRefInput}
-                  onChange={(e) => setPaymentRefInput(e.target.value)}
-                  style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', fontFamily: 'monospace' }}
-                />
-                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Verified securely via CardaLink Payment Gateway</span>
-              </div>
+              {paymentModeInput !== 'UPI' && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '800', color: '#475569', marginBottom: '0.35rem' }}>Gateway Reference / Transaction ID:</label>
+                  <input
+                    type="text"
+                    required
+                    value={paymentRefInput}
+                    onChange={(e) => setPaymentRefInput(e.target.value)}
+                    style={{ width: '100%', height: '42px', padding: '0 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', fontFamily: 'monospace' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Verified securely via CardaLink Payment Gateway</span>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button type="button" onClick={() => setShowPaymentModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
