@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 980" width="1120" height="980">
+    <defs>
+        <marker id="actArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#000" />
+        </marker>
+    </defs>
+
+    <text x="560" y="32" font-family="'Times New Roman', serif" font-size="16" font-weight="bold" text-anchor="middle">Activity Diagram: End-to-End Cardamom Supply Chain Workflow</text>
+
+    <!-- 5 Swimlanes -->
+    <!-- Farmer: 30..230, Trader: 230..450, Exporter: 450..680, Quality: 680..890, Logistics: 890..1090 -->
+    <rect x="30" y="55" width="210" height="900" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+    <rect x="240" y="55" width="220" height="900" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+    <rect x="460" y="55" width="220" height="900" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+    <rect x="680" y="55" width="210" height="900" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+    <rect x="890" y="55" width="200" height="900" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+
+    <!-- Swimlane Headers -->
+    <rect x="30" y="55" width="210" height="30" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+    <text x="135" y="75" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Farmer (Production)</text>
+
+    <rect x="240" y="55" width="220" height="30" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+    <text x="350" y="75" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Trader (Procurement)</text>
+
+    <rect x="460" y="55" width="220" height="30" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+    <text x="570" y="75" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Exporter (Contracts)</text>
+
+    <rect x="680" y="55" width="210" height="30" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+    <text x="785" y="75" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Quality &amp; Compliance</text>
+
+    <rect x="890" y="55" width="200" height="30" fill="#f0f0f0" stroke="#000" stroke-width="1.5"/>
+    <text x="990" y="75" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Logistics &amp; Overseas Buyer</text>
+
+    <!-- INITIAL NODE -->
+    <circle cx="135" cy="115" r="11" fill="#000"/>
+    <line x1="135" y1="126" x2="135" y2="150" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Action 1: Harvest & Curing -->
+    <rect x="50" y="152" width="170" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="135" y="170" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Harvest mature green capsules</text>
+    <text x="135" y="184" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">&amp; cure in drying chamber</text>
+
+    <line x1="135" y1="194" x2="135" y2="220" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Action 2: Record harvest & inventory -->
+    <rect x="50" y="222" width="170" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="135" y="240" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Record dry yield in system</text>
+    <text x="135" y="254" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">&amp; allocate batch barcode</text>
+
+    <line x1="135" y1="264" x2="135" y2="290" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Action 3: Post on marketplace -->
+    <rect x="50" y="292" width="170" height="38" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="135" y="315" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Post lot to domestic market</text>
+
+    <!-- Arrow to Trader lane -->
+    <path d="M 220 311 L 350 311 L 350 348" fill="none" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Trader: Browse & Request -->
+    <rect x="265" y="350" width="170" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="350" y="368" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Browse domestic offerings &amp;</text>
+    <text x="350" y="382" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">submit purchase request</text>
+
+    <line x1="350" y1="392" x2="350" y2="420" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Trader: Decision on Payment -->
+    <polygon points="350,422 390,442 350,462 310,442" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="350" y="445" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">Payment?</text>
+
+    <line x1="390" y1="442" x2="435" y2="442" stroke="#000" stroke-width="1.3"/>
+    <line x1="435" y1="442" x2="435" y2="480" stroke="#000" stroke-width="1.3" marker-end="url(#actArrow)"/>
+    <text x="415" y="435" font-family="'Times New Roman', serif" font-size="9">[Online]</text>
+
+    <line x1="310" y1="442" x2="265" y2="442" stroke="#000" stroke-width="1.3"/>
+    <line x1="265" y1="442" x2="265" y2="480" stroke="#000" stroke-width="1.3" marker-end="url(#actArrow)"/>
+    <text x="285" y="435" font-family="'Times New Roman', serif" font-size="9">[Direct]</text>
+
+    <rect x="375" y="482" width="105" height="32" rx="8" fill="#fff" stroke="#000" stroke-width="1.2"/>
+    <text x="427" y="502" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">Razorpay Gateway</text>
+
+    <rect x="250" y="482" width="105" height="32" rx="8" fill="#fff" stroke="#000" stroke-width="1.2"/>
+    <text x="302" y="502" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">Direct Cash / Wire</text>
+
+    <!-- Merge payment lines -->
+    <path d="M 427 514 L 427 535 L 350 535 L 350 550" fill="none" stroke="#000" stroke-width="1.3" marker-end="url(#actArrow)"/>
+    <path d="M 302 514 L 302 535 L 350 535" fill="none" stroke="#000" stroke-width="1.3"/>
+
+    <!-- Handover & Pickup -->
+    <rect x="260" y="552" width="180" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="350" y="570" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Farmer confirms handover;</text>
+    <text x="350" y="584" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Trader confirms stock pickup</text>
+
+    <!-- Transfer to Exporter -->
+    <path d="M 440 573 L 570 573 L 570 600" fill="none" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Exporter: Create Order -->
+    <rect x="480" y="602" width="180" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="570" y="620" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Formalize export contract</text>
+    <text x="570" y="634" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">&amp; allocate trader batch</text>
+
+    <!-- Arrow to Quality lane -->
+    <path d="M 660 623 L 785 623 L 785 650" fill="none" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Quality Check -->
+    <rect x="695" y="652" width="180" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="785" y="670" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Inspect moisture (&lt;=11%)</text>
+    <text x="785" y="684" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">&amp; caliper diameter (&gt;=8mm)</text>
+
+    <line x1="785" y1="694" x2="785" y2="720" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Decision: Quality Passed? -->
+    <polygon points="785,722 825,742 785,762 745,742" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="785" y="745" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">Passed?</text>
+
+    <line x1="825" y1="742" x2="870" y2="742" stroke="#000" stroke-width="1.3"/>
+    <line x1="870" y1="742" x2="870" y2="780" stroke="#000" stroke-width="1.3" marker-end="url(#actArrow)"/>
+    <text x="845" y="735" font-family="'Times New Roman', serif" font-size="9">[No]</text>
+
+    <rect x="830" y="782" width="80" height="30" rx="6" fill="#fff" stroke="#000" stroke-width="1.2"/>
+    <text x="870" y="801" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">Re-cure / Downgrade</text>
+
+    <line x1="785" y1="762" x2="785" y2="800" stroke="#000" stroke-width="1.3" marker-end="url(#actArrow)"/>
+    <text x="797" y="780" font-family="'Times New Roman', serif" font-size="9">[Yes]</text>
+
+    <!-- Packaging & Clearance -->
+    <rect x="695" y="802" width="180" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="785" y="820" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Vacuum pack &amp; upload</text>
+    <text x="785" y="834" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Phytosanitary &amp; Origin certs</text>
+
+    <!-- Arrow to Logistics -->
+    <path d="M 875 823 L 990 823 L 990 850" fill="none" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Logistics: Dispatch & Delivery Confirm -->
+    <rect x="905" y="852" width="170" height="42" rx="10" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="990" y="870" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Dispatch freight consignment</text>
+    <text x="990" y="884" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">&amp; email secure delivery token</text>
+
+    <line x1="990" y1="894" x2="990" y2="915" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- Buyer confirmation -->
+    <rect x="905" y="917" width="170" height="35" rx="8" fill="#fff" stroke="#000" stroke-width="1.4"/>
+    <text x="990" y="934" font-family="'Times New Roman', serif" font-size="10.5" text-anchor="middle">Buyer confirms receipt (GOOD)</text>
+    <text x="990" y="946" font-family="'Times New Roman', serif" font-size="9" text-anchor="middle">&amp; settle final transaction</text>
+
+    <line x1="990" y1="952" x2="990" y2="964" stroke="#000" stroke-width="1.4" marker-end="url(#actArrow)"/>
+
+    <!-- FINAL NODE -->
+    <circle cx="990" cy="970" r="10" fill="#fff" stroke="#000" stroke-width="1.5"/>
+    <circle cx="990" cy="970" r="6" fill="#000"/>
+</svg>

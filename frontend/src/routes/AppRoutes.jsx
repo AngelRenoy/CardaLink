@@ -7,6 +7,7 @@ import { FarmerDashboard } from '../pages/FarmerDashboard';
 import { TraderDashboard } from '../pages/TraderDashboard';
 import { ExporterDashboard } from '../pages/ExporterDashboard';
 import { AdminDashboard } from '../pages/AdminDashboard';
+import { BuyerDeliveryConfirmationPage } from '../pages/BuyerDeliveryConfirmationPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleProtectedRoute } from './RoleProtectedRoute';
 
@@ -17,6 +18,8 @@ export const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/confirm-delivery/:token" element={<BuyerDeliveryConfirmationPage />} />
+      <Route path="/confirm-delivery" element={<BuyerDeliveryConfirmationPage />} />
 
       {/* Role Protected Dashboard Routes */}
       <Route

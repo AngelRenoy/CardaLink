@@ -37,3 +37,7 @@ scratch/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Media & Uploads
+backend/media/*
+!backend/media/.gitkeep

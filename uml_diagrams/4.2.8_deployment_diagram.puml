@@ -1,0 +1,60 @@
+@startuml 4.2.8_deployment_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+node "Client Device\n<<device>>\n(Desktop / Laptop / Mobile)" as ClientDevice {
+    node "Web Browser Environment\n<<execution environment>>\n(Google Chrome / Safari / Firefox)" as BrowserEnv {
+        artifact "CardaLink React.js SPA\n<<artifact>>\n(HTML5, CSS3, ES6+ JS)" as ClientArtifact
+    }
+}
+
+node "Vercel Cloud Platform\n<<node>>\n(Global Edge Network)" as VercelNode {
+    node "Vercel Web Server & Edge CDN\n<<execution environment>>" as VercelEdge {
+        artifact "CardaLink Static Build Bundle\n<<artifact>>\n(Vite Production Build, index.html, vercel.json)" as StaticBundle
+    }
+}
+
+node "Render Cloud Platform\n<<node>>\n(PaaS Linux Container)" as RenderNode {
+    node "Ubuntu Linux Container (Render Web Service)\n<<execution environment>>" as RenderOS {
+        node "Python 3.9+ Runtime\n<<execution environment>>" as PyEnv {
+            component "Gunicorn WSGI Server\n<<component>>" as Gunicorn
+            component "Django REST Framework\n<<application>>\n(cardalink_server & iam)" as DjangoApp
+        }
+        artifact "Environment Configuration\n<<artifact>>\n(DATABASE_URL, JWT_SECRET, RAZORPAY_KEY)" as BackendEnv
+    }
+}
+
+node "Render Cloud Managed Database\n<<node>>\n(Database Server)" as DBNode {
+    node "PostgreSQL 15 Server Engine\n<<execution environment>>" as PGEnv {
+        database "cardalink_db\n<<database>>" as Database {
+            artifact "CardaLink Relational Schema\n<<artifact>>\n(25 Normalized Relational Tables)" as TablesArtifact
+        }
+    }
+}
+
+node "Google Identity Cloud\n<<cloud service>>" as GoogleCloud {
+    component "Google OAuth 2.0 API\n<<service>>" as GoogleOAuth
+}
+
+node "Razorpay Cloud Infrastructure\n<<cloud service>>" as RazorpayCloud {
+    component "Razorpay Payment API\n<<service>>" as RazorpayAPI
+}
+
+node "SMTP Email Gateway\n<<cloud service>>" as MailServer {
+    component "SMTP Mail Server\n<<service>>" as SMTPServer
+}
+
+' Connections and Protocols
+ClientDevice -- VercelNode : "HTTPS / TLS 1.3\n(Port 443)"
+ClientDevice -- RenderNode : "REST API / JSON over HTTPS\n(Port 443 / CORS Enabled)"
+RenderNode -- DBNode : "PostgreSQL Wire Protocol over SSL\n(TCP Port 5432)"
+RenderNode ..> GoogleCloud : "OAuth 2.0 REST API\n(HTTPS Port 443)"
+RenderNode ..> RazorpayCloud : "Payment Webhook & API\n(HTTPS Port 443)"
+RenderNode ..> MailServer : "SMTP / TLS\n(Port 587)"
+
+StaticBundle ..> ClientArtifact : "<<deploys to client>>"
+Gunicorn --> DjangoApp : "WSGI Interface"
+DjangoApp --> TablesArtifact : "Django ORM / psycopg2"
+@enduml

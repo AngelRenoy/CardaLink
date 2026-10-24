@@ -1,0 +1,254 @@
+@startuml 4.2.5_class_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 10
+skinparam classAttributeIconSize 0
+
+class User {
+    +id : BigInt [PK]
+    +full_name : Varchar(150)
+    +email : Varchar(255)
+    +phone : Varchar(20)
+    +role : Varchar(20)
+    +password_hash : Varchar(255)
+    +avatar : Text
+    +is_verified : Boolean
+    +status : Varchar(20)
+    +created_at : Timestamp
+    +updated_at : Timestamp
+    +login() : Boolean
+    +register() : Boolean
+    +updateProfile() : Void
+}
+
+class Plantation {
+    +id : BigInt [PK]
+    +farmer_id : BigInt [FK]
+    +name : Varchar(150)
+    +location : Varchar(255)
+    +area_acres : Decimal(8,2)
+    +number_of_plants : Integer
+    +variety : Varchar(100)
+    +details : Text
+    +status : Varchar(20)
+    +created_at : Timestamp
+    +addPlantation() : Void
+    +updateStatus() : Void
+}
+
+class HarvestRecord {
+    +id : BigInt [PK]
+    +farmer_id : BigInt [FK]
+    +plantation_id : BigInt [FK]
+    +harvest_cycle_id : BigInt [FK]
+    +harvest_date : Date
+    +fresh_quantity_kg : Decimal(10,2)
+    +dried_quantity_kg : Decimal(10,2)
+    +variety : Varchar(100)
+    +grade : Varchar(50)
+    +unit : Varchar(20)
+    +notes : Text
+    +created_at : Timestamp
+    +calculateYieldRatio() : Decimal
+}
+
+class AgrochemicalUsage {
+    +id : BigInt [PK]
+    +farmer_id : BigInt [FK]
+    +plantation_id : BigInt [FK]
+    +usage_type : Varchar(20)
+    +name : Varchar(150)
+    +quantity : Decimal(10,2)
+    +unit : Varchar(20)
+    +application_date : Date
+    +next_application_date : Date
+    +cost : Decimal(12,2)
+    +purpose : Text
+    +created_at : Timestamp
+}
+
+class InventoryItem {
+    +id : BigInt [PK]
+    +owner_id : BigInt [FK]
+    +source_farmer_id : BigInt [FK]
+    +source_trader_id : BigInt [FK]
+    +plantation_id : BigInt [FK]
+    +variety : Varchar(100)
+    +quantity_kg : Decimal(10,2)
+    +unit : Varchar(20)
+    +grade : Varchar(50)
+    +purchase_price_per_kg : Decimal(10,2)
+    +total_cost : Decimal(12,2)
+    +status : Varchar(30)
+    +batch_code : Varchar(50) [UQ]
+    +created_at : Timestamp
+    +allocateStock() : Boolean
+    +deductQuantity() : Void
+}
+
+class MarketplaceListing {
+    +id : BigInt [PK]
+    +farmer_id : BigInt [FK]
+    +variety : Varchar(100)
+    +available_quantity_kg : Decimal(10,2)
+    +unit : Varchar(20)
+    +price_per_kg : Decimal(10,2)
+    +grade : Varchar(50)
+    +plantation_id : BigInt [FK]
+    +harvest_record_id : BigInt [FK]
+    +status : Varchar(30)
+    +available_date : Date
+    +notes : Text
+    +created_at : Timestamp
+    +reserveQuantity() : Void
+}
+
+class PurchaseRequest {
+    +id : BigInt [PK]
+    +trader_id : BigInt [FK]
+    +farmer_id : BigInt [FK]
+    +marketplace_listing_id : BigInt [FK]
+    +variety : Varchar(100)
+    +grade : Varchar(50)
+    +plantation_id : BigInt [FK]
+    +requested_quantity_kg : Decimal(10,2)
+    +price_per_kg : Decimal(10,2)
+    +total_amount : Decimal(12,2)
+    +payment_method : Varchar(30)
+    +payment_status : Varchar(30)
+    +pickup_status : Varchar(30)
+    +payment_reference : Varchar(255)
+    +handover_confirmed_by_farmer : Boolean
+    +pickup_confirmed_by_trader : Boolean
+    +status : Varchar(30)
+    +created_at : Timestamp
+    +confirmHandover() : Void
+    +confirmPickup() : Void
+}
+
+class InternationalBuyer {
+    +id : BigInt [PK]
+    +exporter_id : BigInt [FK]
+    +name : Varchar(150)
+    +company_name : Varchar(150)
+    +country : Varchar(100)
+    +email : Varchar(255)
+    +phone : Varchar(30)
+    +address : Text
+    +created_at : Timestamp
+    +getBuyerProfile() : Object
+}
+
+class ExportOrder {
+    +id : BigInt [PK]
+    +order_code : Varchar(50) [UQ]
+    +exporter_id : BigInt [FK]
+    +buyer_id : BigInt [FK]
+    +inventory_item_id : BigInt [FK]
+    +destination_country : Varchar(100)
+    +destination_port : Varchar(100)
+    +shipment_method : Varchar(50)
+    +incoterms : Varchar(50)
+    +cardamom_variety : Varchar(100)
+    +grade : Varchar(50)
+    +quantity_kg : Decimal(10,2)
+    +price_per_kg : Decimal(10,2)
+    +total_value_usd : Decimal(12,2)
+    +payment_method : Varchar(50)
+    +payment_status : Varchar(30)
+    +status : Varchar(30)
+    +created_at : Timestamp
+    +updateOrderStatus() : Void
+}
+
+class QualityRecord {
+    +id : BigInt [PK]
+    +export_order_id : BigInt [FK]
+    +variety : Varchar(100)
+    +grade : Varchar(50)
+    +moisture_percentage : Decimal(5,2)
+    +size_mm : Varchar(50)
+    +color_appearance : Varchar(100)
+    +quality_status : Varchar(30)
+    +inspection_date : Date
+    +inspector_name : Varchar(150)
+    +remarks : Text
+    +created_at : Timestamp
+    +evaluateQuality() : Boolean
+}
+
+class ExportDocument {
+    +id : BigInt [PK]
+    +export_order_id : BigInt [FK]
+    +document_type : Varchar(100)
+    +document_name : Varchar(255)
+    +document_number : Varchar(100)
+    +file_url : Text
+    +status : Varchar(30)
+    +issued_date : Date
+    +created_at : Timestamp
+    +verifyDocument() : Void
+}
+
+class ShipmentRecord {
+    +id : BigInt [PK]
+    +export_order_id : BigInt [FK]
+    +tracking_number : Varchar(100) [UQ]
+    +carrier : Varchar(100)
+    +shipping_method : Varchar(50)
+    +origin : Varchar(100)
+    +destination : Varchar(100)
+    +dispatch_date : Date
+    +estimated_delivery : Date
+    +status : Varchar(30)
+    +created_at : Timestamp
+    +updateTrackingStatus() : Void
+}
+
+class BuyerDeliveryConfirmation {
+    +id : BigInt [PK]
+    +export_order_id : BigInt [FK]
+    +buyer_id : BigInt [FK]
+    +confirmation_reference : Varchar(50) [UQ]
+    +quantity_received_kg : Decimal(10,2)
+    +delivery_condition : Varchar(50)
+    +is_dispute : Boolean
+    +comments : Text
+    +confirmed_at : Timestamp
+    +recordConfirmation() : Void
+}
+
+class TransactionRecord {
+    +id : BigInt [PK]
+    +transaction_code : Varchar(50) [UQ]
+    +sender_id : BigInt [FK]
+    +receiver_id : BigInt [FK]
+    +amount : Decimal(12,2)
+    +payment_method : Varchar(50)
+    +status : Varchar(30)
+    +created_at : Timestamp
+    +auditLog() : Void
+}
+
+' Relationships & Multiplicities
+User "1" *-- "0..*" Plantation : owns >
+User "1" *-- "0..*" HarvestRecord : logs >
+Plantation "1" *-- "0..*" HarvestRecord : yields >
+Plantation "1" *-- "0..*" AgrochemicalUsage : treated with >
+User "1" *-- "0..*" InventoryItem : holds >
+User "1" *-- "0..*" MarketplaceListing : publishes >
+MarketplaceListing "1" <-- "0..*" PurchaseRequest : orders from >
+User "1" <-- "0..*" PurchaseRequest : trader buyer >
+User "1" <-- "0..*" PurchaseRequest : farmer seller >
+User "1" *-- "0..*" InternationalBuyer : manages >
+InternationalBuyer "1" <-- "0..*" ExportOrder : orders >
+User "1" <-- "0..*" ExportOrder : exporter >
+InventoryItem "1" <-- "0..*" ExportOrder : allocated to >
+ExportOrder "1" *-- "1..*" QualityRecord : verified by >
+ExportOrder "1" *-- "1..*" ExportDocument : cleared with >
+ExportOrder "1" *-- "1" ShipmentRecord : transported via >
+ExportOrder "1" *-- "0..1" BuyerDeliveryConfirmation : confirmed by >
+User "1" <-- "0..*" TransactionRecord : sender >
+User "1" <-- "0..*" TransactionRecord : receiver >
+@enduml

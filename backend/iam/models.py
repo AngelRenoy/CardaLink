@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 class User(models.Model):
     ROLE_CHOICES = [
@@ -250,7 +251,9 @@ class ExportOrder(models.Model):
         ('SHIPPED', 'Shipped'),
         ('IN_TRANSIT', 'In Transit'),
         ('ARRIVED', 'Arrived'),
+        ('AWAITING_BUYER_CONFIRMATION', 'Awaiting Buyer Confirmation'),
         ('DELIVERED', 'Delivered'),
+        ('DELIVERY_DISPUTE', 'Delivery Dispute'),
         ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
     ]
@@ -287,6 +290,8 @@ class ExportOrder(models.Model):
     payment_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='CONFIRMED')
+    buyer_confirmed_order = models.BooleanField(default=False)
+    buyer_confirmed_order_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -352,7 +357,9 @@ class ShipmentRecord(models.Model):
         ('SHIPPED', 'Shipped'),
         ('IN_TRANSIT', 'In Transit'),
         ('ARRIVED', 'Arrived'),
+        ('AWAITING_BUYER_CONFIRMATION', 'Awaiting Buyer Confirmation'),
         ('DELIVERED', 'Delivered'),
+        ('DELIVERY_DISPUTE', 'Delivery Dispute'),
     ]
     export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='shipments')
     tracking_number = models.CharField(max_length=100, unique=True)
@@ -368,6 +375,63 @@ class ShipmentRecord(models.Model):
     class Meta:
         db_table = 'shipment_records'
         ordering = ['-created_at']
+
+class BuyerDeliveryToken(models.Model):
+    TOKEN_TYPES = [
+        ('ORDER_CONFIRM', 'Order Confirmation'),
+        ('DELIVERY_REVIEW', 'Delivery Review & Confirmation'),
+    ]
+    export_order = models.ForeignKey(ExportOrder, on_delete=models.CASCADE, related_name='delivery_tokens')
+    buyer = models.ForeignKey(InternationalBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_tokens')
+    token_type = models.CharField(max_length=30, choices=TOKEN_TYPES, default='ORDER_CONFIRM')
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField(db_index=True)
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    is_revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    sent_to_email = models.EmailField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_sent_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'buyer_delivery_tokens'
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        return not self.is_used and not self.is_revoked and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"Token for {self.export_order.order_code} (Used: {self.is_used})"
+
+class BuyerDeliveryConfirmation(models.Model):
+    CONDITION_CHOICES = [
+        ('GOOD', 'Received in Good Condition'),
+        ('PARTIAL', 'Partial Delivery'),
+        ('DAMAGED', 'Damaged Goods'),
+    ]
+
+    export_order = models.OneToOneField(ExportOrder, on_delete=models.CASCADE, related_name='delivery_confirmation')
+    buyer = models.ForeignKey(InternationalBuyer, on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_confirmations')
+    token = models.ForeignKey(BuyerDeliveryToken, on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmations')
+    confirmation_reference = models.CharField(max_length=50, unique=True, db_index=True)
+    quantity_ordered_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity_received_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_condition = models.CharField(max_length=50, choices=CONDITION_CHOICES, default='GOOD')
+    comments = models.TextField(blank=True, null=True)
+    evidence_file = models.FileField(upload_to='delivery_evidence/%Y/%m/', null=True, blank=True)
+    evidence_file_name = models.CharField(max_length=255, blank=True, null=True)
+    is_dispute = models.BooleanField(default=False)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'buyer_delivery_confirmations'
+        ordering = ['-confirmed_at']
+
+    def __str__(self):
+        return f"{self.confirmation_reference} - {self.export_order.order_code} ({self.delivery_condition})"
 
 class NotificationItem(models.Model):
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
@@ -465,7 +529,9 @@ class ExportSupplyRequest(models.Model):
         ('ACCEPTED', 'Accepted'),
         ('PAYMENT_PENDING', 'Payment Pending'),
         ('PAID', 'Paid'),
+        ('READY_FOR_PICKUP', 'Ready For Pickup'),
         ('READY_FOR_RECEIPT', 'Ready For Receipt'),
+        ('PICKUP_CONFIRMED', 'Pickup Confirmed'),
         ('RECEIVED', 'Received'),
         ('REJECTED', 'Rejected'),
         ('COMPLETED', 'Completed'),

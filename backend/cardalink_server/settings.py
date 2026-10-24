@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from backend/.env
-load_dotenv(BASE_DIR / '.env')
+# Load environment variables from backend/.env (reload on update)
+load_dotenv(BASE_DIR / '.env', override=True)
 
 SECRET_KEY = os.getenv('JWT_SECRET', 'cardalink_super_secret_django_key_2026')
 DEBUG = os.getenv('NODE_ENV', 'development') != 'production'
@@ -87,3 +87,25 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
+
+# Static & Media Files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Frontend Application Base URL
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# Email Configuration
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST_USER else 'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'CardaLink Exports <no-reply@cardalink.com>')
+
+# Buyer Delivery Confirmation Expiry in hours (default: 72 hours)
+DELIVERY_CONFIRMATION_EXPIRY_HOURS = int(os.getenv('DELIVERY_CONFIRMATION_EXPIRY_HOURS', 72))

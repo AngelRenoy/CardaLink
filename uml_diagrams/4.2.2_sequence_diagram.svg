@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 980" width="1120" height="980">
+    <defs>
+        <marker id="seqArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#000" />
+        </marker>
+        <marker id="seqReturn" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polyline points="0,1 9,5 0,9" fill="none" stroke="#000" stroke-width="1.5" />
+        </marker>
+    </defs>
+
+    <!-- Title -->
+    <text x="560" y="30" font-family="'Times New Roman', serif" font-size="15" font-weight="bold" text-anchor="middle">Sequence Diagram: End-to-End Cardamom Trade &amp; Export Lifecycle</text>
+
+    <!-- Lifelines -->
+    <!-- Coordinates: Farmer=80, Trader=220, Exporter=370, Buyer=520, UI=690, Backend=860, DB=1020 -->
+    <!-- Headers -->
+    <g transform="translate(80, 50)">
+        <rect x="-45" y="0" width="90" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="22" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Farmer</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(220, 50)">
+        <rect x="-45" y="0" width="90" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="22" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Trader</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(370, 50)">
+        <rect x="-45" y="0" width="90" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="22" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Exporter</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(520, 50)">
+        <rect x="-55" y="0" width="110" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="15" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">International</text>
+        <text x="0" y="28" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">Buyer</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(690, 50)">
+        <rect x="-60" y="0" width="120" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="15" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">:React.js UI</text>
+        <text x="0" y="28" font-family="'Times New Roman', serif" font-size="10" text-anchor="middle">(Frontend)</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(860, 50)">
+        <rect x="-65" y="0" width="130" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="15" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">:Django REST</text>
+        <text x="0" y="28" font-family="'Times New Roman', serif" font-size="10" text-anchor="middle">(Backend API)</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <g transform="translate(1020, 50)">
+        <rect x="-55" y="0" width="110" height="35" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <text x="0" y="15" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">:PostgreSQL</text>
+        <text x="0" y="28" font-family="'Times New Roman', serif" font-size="10" text-anchor="middle">(cardalink_db)</text>
+        <line x1="0" y1="35" x2="0" y2="880" stroke="#666" stroke-width="1" stroke-dasharray="4,4"/>
+    </g>
+
+    <!-- SECTION 1: Harvest & Marketplace Listing -->
+    <rect x="50" y="95" width="1020" height="135" fill="#fcfcfc" stroke="#999" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="60" y="112" font-family="'Times New Roman', serif" font-size="11" font-weight="bold">Phase 1: Harvest Recording &amp; Domestic Marketplace Listing</text>
+
+    <!-- 1. Farmer records harvest -->
+    <line x1="80" y1="130" x2="682" y2="130" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="350" y="124" font-family="'Times New Roman', serif" font-size="10">1: enterHarvestDetails(fresh_kg, dry_kg, grade)</text>
+
+    <line x1="690" y1="150" x2="852" y2="150" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="730" y="144" font-family="'Times New Roman', serif" font-size="10">2: POST /api/harvests/</text>
+
+    <line x1="860" y1="170" x2="1012" y2="170" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="890" y="164" font-family="'Times New Roman', serif" font-size="10">3: INSERT INTO harvest_records</text>
+
+    <!-- 4. Farmer lists on marketplace -->
+    <line x1="80" y1="200" x2="682" y2="200" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="350" y="194" font-family="'Times New Roman', serif" font-size="10">4: postMarketplaceListing(qty, price_per_kg)</text>
+
+    <line x1="690" y1="215" x2="1012" y2="215" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="810" y="210" font-family="'Times New Roman', serif" font-size="10">5: INSERT marketplace_listings (status='AVAILABLE')</text>
+
+    <!-- SECTION 2: Trader Procurement & Handover -->
+    <rect x="50" y="240" width="1020" height="210" fill="#fcfcfc" stroke="#999" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="60" y="257" font-family="'Times New Roman', serif" font-size="11" font-weight="bold">Phase 2: Domestic Trading, Online/Direct Settlement &amp; Custody Transfer</text>
+
+    <line x1="220" y1="280" x2="682" y2="280" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="420" y="274" font-family="'Times New Roman', serif" font-size="10">6: submitPurchaseRequest(listing_id, requested_kg)</text>
+
+    <line x1="690" y1="298" x2="1012" y2="298" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="292" font-family="'Times New Roman', serif" font-size="10">7: INSERT purchase_requests (status='PENDING')</text>
+
+    <line x1="220" y1="330" x2="682" y2="330" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="420" y="324" font-family="'Times New Roman', serif" font-size="10">8: processOrderPayment(Razorpay / Direct)</text>
+
+    <line x1="690" y1="345" x2="1012" y2="345" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="340" font-family="'Times New Roman', serif" font-size="10">9: UPDATE purchase_requests (payment_status='PAID')</text>
+
+    <line x1="80" y1="380" x2="682" y2="380" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="350" y="374" font-family="'Times New Roman', serif" font-size="10">10: confirmHandover()</text>
+
+    <line x1="690" y1="395" x2="1012" y2="395" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="790" y="390" font-family="'Times New Roman', serif" font-size="10">11: UPDATE purchase_requests (handover_confirmed=TRUE)</text>
+
+    <line x1="220" y1="420" x2="682" y2="420" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="420" y="414" font-family="'Times New Roman', serif" font-size="10">12: confirmPickup()</text>
+
+    <line x1="690" y1="435" x2="1012" y2="435" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="780" y="430" font-family="'Times New Roman', serif" font-size="10">13: Transfer lot to Trader inventory_items &amp; set COMPLETED</text>
+
+    <!-- SECTION 3: Export Contract & Quality -->
+    <rect x="50" y="460" width="1020" height="210" fill="#fcfcfc" stroke="#999" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="60" y="477" font-family="'Times New Roman', serif" font-size="11" font-weight="bold">Phase 3: International Export Order, Lab Quality Check &amp; Compliance Clearances</text>
+
+    <line x1="370" y1="500" x2="682" y2="500" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="480" y="494" font-family="'Times New Roman', serif" font-size="10">14: createExportOrder(buyer_id, Incoterms, USD_val)</text>
+
+    <line x1="690" y1="515" x2="1012" y2="515" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="510" font-family="'Times New Roman', serif" font-size="10">15: INSERT export_orders (status='CONFIRMED')</text>
+
+    <line x1="370" y1="545" x2="682" y2="545" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="480" y="539" font-family="'Times New Roman', serif" font-size="10">16: recordQualityInspection(moisture=9.8%, 8mm Bold)</text>
+
+    <line x1="690" y1="560" x2="1012" y2="560" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="555" font-family="'Times New Roman', serif" font-size="10">17: INSERT quality_records (quality_status='APPROVED')</text>
+
+    <line x1="370" y1="590" x2="682" y2="590" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="480" y="584" font-family="'Times New Roman', serif" font-size="10">18: uploadExportDocuments(Phytosanitary, Origin, Invoice)</text>
+
+    <line x1="690" y1="605" x2="1012" y2="605" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="600" font-family="'Times New Roman', serif" font-size="10">19: INSERT export_documents (status='VERIFIED')</text>
+
+    <line x1="370" y1="635" x2="682" y2="635" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="480" y="629" font-family="'Times New Roman', serif" font-size="10">20: dispatchShipment(carrier='Maersk', tracking_num)</text>
+
+    <line x1="690" y1="650" x2="1012" y2="650" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="800" y="645" font-family="'Times New Roman', serif" font-size="10">21: INSERT shipment_records &amp; set export_order 'SHIPPED'</text>
+
+    <!-- SECTION 4: Buyer Delivery Confirmation -->
+    <rect x="50" y="680" width="1020" height="210" fill="#fcfcfc" stroke="#999" stroke-width="1" stroke-dasharray="3,3" />
+    <text x="60" y="697" font-family="'Times New Roman', serif" font-size="11" font-weight="bold">Phase 4: Cargo Transit &amp; Buyer Digital Delivery Confirmation Link</text>
+
+    <line x1="370" y1="720" x2="852" y2="720" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="560" y="714" font-family="'Times New Roman', serif" font-size="10">22: POST /api/export-orders/{id}/send-delivery-token/</text>
+
+    <line x1="860" y1="735" x2="1012" y2="735" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="890" y="730" font-family="'Times New Roman', serif" font-size="10">23: generateToken() &amp; send email via SMTP</text>
+
+    <line x1="860" y1="765" x2="528" y2="765" stroke="#000" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#seqReturn)"/>
+    <text x="620" y="760" font-family="'Times New Roman', serif" font-size="10">24: Deliver email link to buyer inbox</text>
+
+    <line x1="520" y1="795" x2="682" y2="795" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="560" y="789" font-family="'Times New Roman', serif" font-size="10">25: clickConfirmationLink(token)</text>
+
+    <line x1="690" y1="810" x2="852" y2="810" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="730" y="805" font-family="'Times New Roman', serif" font-size="10">26: GET /api/delivery-confirmations/{token}/</text>
+
+    <line x1="520" y1="840" x2="682" y2="840" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="560" y="834" font-family="'Times New Roman', serif" font-size="10">27: submitDeliveryConfirmation(condition='GOOD')</text>
+
+    <line x1="690" y1="855" x2="1012" y2="855" stroke="#000" stroke-width="1.2" marker-end="url(#seqArrow)"/>
+    <text x="760" y="850" font-family="'Times New Roman', serif" font-size="10">28: INSERT confirmation, mark token used &amp; set order COMPLETED</text>
+
+    <line x1="1020" y1="875" x2="528" y2="875" stroke="#000" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#seqReturn)"/>
+    <text x="680" y="870" font-family="'Times New Roman', serif" font-size="10">29: 200 OK (Contract &amp; Settlement Complete)</text>
+</svg>

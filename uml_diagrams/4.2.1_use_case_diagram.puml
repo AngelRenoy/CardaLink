@@ -1,0 +1,108 @@
+@startuml 4.2.1_use_case_diagram
+left to right direction
+skinparam packageStyle rectangle
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+
+actor "Farmer" as farmer
+actor "Trader" as trader
+actor "Exporter" as exporter
+actor "International\nBuyer" as buyer
+actor "Admin" as admin
+
+rectangle "CardaLink - Smart Cardamom Plantation & Export Management System" {
+    package "Authentication & User Management" {
+        usecase "UC1: Register & Login (JWT / OAuth)" as UC_Auth
+        usecase "UC2: Manage Profile & Roles" as UC_Profile
+        usecase "UC3: Approve / Suspend User Accounts" as UC_ApproveUser
+    }
+
+    package "Plantation & Agricultural Inputs" {
+        usecase "UC4: Register Plantation & Crop Acreage" as UC_Plantation
+        usecase "UC5: Log Agrochemical Usages (Fertilizers/Pesticides)" as UC_Agro
+        usecase "UC6: Record Irrigation Operations" as UC_Irrigation
+    }
+
+    package "Harvest & Inventory Management" {
+        usecase "UC7: Log Daily Harvest & Dry Yield" as UC_Harvest
+        usecase "UC8: Manage Multi-Tier Inventory & Batches" as UC_Inventory
+    }
+
+    package "Domestic Marketplace & Trading" {
+        usecase "UC9: Post Marketplace Crop Listing" as UC_Listing
+        usecase "UC10: Browse Available Cardamom Lots" as UC_Browse
+        usecase "UC11: Submit Procurement Purchase Request" as UC_PurchaseReq
+        usecase "UC12: Settle Payment (Razorpay / Direct)" as UC_Pay
+        usecase "UC13: Confirm Handover & Physical Pickup" as UC_Pickup
+    }
+
+    package "International Export Management" {
+        usecase "UC14: Manage International Buyers (CRM)" as UC_Buyers
+        usecase "UC15: Create International Export Order" as UC_ExportOrder
+        usecase "UC16: Request Stock via Export Supply Request" as UC_SupplyReq
+        usecase "UC17: Conduct Lab Quality Inspection (Moisture/Size)" as UC_Quality
+        usecase "UC18: Log Vacuum Packaging Specifications" as UC_Packaging
+        usecase "UC19: Upload Regulatory Export Documents" as UC_Documents
+        usecase "UC20: Manage Freight Shipments & Tracking" as UC_Shipment
+        usecase "UC21: Generate & Dispatch Buyer Delivery Token" as UC_Token
+    }
+
+    package "Buyer Delivery Confirmation & Auditing" {
+        usecase "UC22: Review Cargo & Submit Delivery Confirmation" as UC_BuyerConfirm
+        usecase "UC23: Raise Delivery Condition Dispute" as UC_Dispute
+        usecase "UC24: Audit System Transactions & Logs" as UC_Audit
+    }
+}
+
+' Farmer relationships
+farmer --> UC_Auth
+farmer --> UC_Profile
+farmer --> UC_Plantation
+farmer --> UC_Agro
+farmer --> UC_Irrigation
+farmer --> UC_Harvest
+farmer --> UC_Listing
+farmer --> UC_Pickup
+farmer --> UC_Inventory
+
+' Trader relationships
+trader --> UC_Auth
+trader --> UC_Profile
+trader --> UC_Browse
+trader --> UC_PurchaseReq
+trader --> UC_Pay
+trader --> UC_Pickup
+trader --> UC_Inventory
+trader --> UC_SupplyReq
+
+' Exporter relationships
+exporter --> UC_Auth
+exporter --> UC_Profile
+exporter --> UC_Buyers
+exporter --> UC_ExportOrder
+exporter --> UC_SupplyReq
+exporter --> UC_Inventory
+exporter --> UC_Quality
+exporter --> UC_Packaging
+exporter --> UC_Documents
+exporter --> UC_Shipment
+exporter --> UC_Token
+
+' International Buyer relationships
+buyer --> UC_BuyerConfirm
+buyer --> UC_Dispute
+
+' Admin relationships
+admin --> UC_Auth
+admin --> UC_ApproveUser
+admin --> UC_Audit
+
+' Include relationships
+UC_Listing ..> UC_Harvest : <<include>>
+UC_PurchaseReq ..> UC_Browse : <<include>>
+UC_ExportOrder ..> UC_Buyers : <<include>>
+UC_BuyerConfirm ..> UC_Token : <<include>>
+UC_Quality ..> UC_ExportOrder : <<include>>
+@enduml

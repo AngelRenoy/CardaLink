@@ -1,0 +1,206 @@
+@startuml 4.2.2_sequence_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+autonumber
+actor "Farmer" as Farmer
+actor "Trader" as Trader
+actor "Exporter" as Exporter
+actor "International\nBuyer" as Buyer
+boundary "React.js Frontend\n(CardaLink UI)" as UI
+control "Django REST API\n(Backend Controller)" as API
+database "PostgreSQL DB\n(cardalink_db)" as DB
+
+== 1. Harvest Logging & Marketplace Listing ==
+Farmer -> UI: Record Harvest (fresh kg, dry kg, grade, variety)
+activate UI
+UI -> API: POST /api/harvests/
+activate API
+API -> DB: INSERT INTO harvest_records & inventory_items
+activate DB
+DB --> API: 201 Created (batch_code: BAT-2026-FARM-101)
+deactivate DB
+API --> UI: Harvest recorded & inventory updated
+deactivate API
+UI --> Farmer: Display success notification
+deactivate UI
+
+Farmer -> UI: Post Lot to Domestic Marketplace
+activate UI
+UI -> API: POST /api/marketplace/
+activate API
+API -> DB: INSERT INTO marketplace_listings (status='AVAILABLE')
+activate DB
+DB --> API: 201 Created (listing_id)
+deactivate DB
+API --> UI: Listing published
+deactivate API
+UI --> Farmer: Listing Active
+deactivate UI
+
+== 2. Trader Procurement & Handover ==
+Trader -> UI: Browse Marketplace & Submit Purchase Request
+activate UI
+UI -> API: POST /api/purchase-requests/ (qty, price)
+activate API
+API -> DB: INSERT INTO purchase_requests (status='PENDING')
+activate DB
+DB --> API: 201 Created (request_id)
+deactivate DB
+API --> UI: Purchase Request Sent
+deactivate API
+UI --> Trader: Order Pending Farmer Acceptance
+deactivate UI
+
+Trader -> UI: Settle Order Payment (Razorpay / Cash)
+activate UI
+UI -> API: POST /api/purchase-requests/{id}/pay/
+activate API
+API -> DB: UPDATE purchase_requests (payment_status='PAID')
+activate DB
+DB --> API: 200 OK
+deactivate DB
+API --> UI: Payment Confirmed
+deactivate API
+UI --> Trader: Payment Acknowledged
+deactivate UI
+
+Farmer -> UI: Confirm Stock Handover
+activate UI
+UI -> API: POST /api/purchase-requests/{id}/confirm-handover/
+activate API
+API -> DB: UPDATE purchase_requests (handover_confirmed=TRUE)
+activate DB
+DB --> API: 200 OK
+deactivate DB
+API --> UI: Handover Logged
+deactivate API
+UI --> Farmer: Handover Recorded
+deactivate UI
+
+Trader -> UI: Confirm Physical Stock Pickup
+activate UI
+UI -> API: POST /api/purchase-requests/{id}/confirm-pickup/
+activate API
+API -> DB: UPDATE purchase_requests (pickup_confirmed=TRUE, status='COMPLETED')
+activate DB
+API -> DB: INSERT INTO inventory_items (owner=Trader, batch_code)
+DB --> API: Stock Transferred to Trader Inventory
+deactivate DB
+API --> UI: Pickup Confirmed & Inventory Transferred
+deactivate API
+UI --> Trader: Stock in Trader Warehouse
+deactivate UI
+
+== 3. International Export Order & Compliance ==
+Exporter -> UI: Create Export Order (Buyer, Incoterms, USD value, Port)
+activate UI
+UI -> API: POST /api/export-orders/
+activate API
+API -> DB: INSERT INTO export_orders (status='CONFIRMED')
+activate DB
+DB --> API: 201 Created (EXP-ORD-B8363043)
+deactivate DB
+API --> UI: Export Contract Initialized
+deactivate API
+UI --> Exporter: Order Created
+deactivate UI
+
+Exporter -> UI: Request Supply from Trader Inventory
+activate UI
+UI -> API: POST /api/export-supplies/
+activate API
+API -> DB: Transfer Lot to Exporter Inventory
+activate DB
+DB --> API: 200 OK
+deactivate DB
+API --> UI: Batch Allocated to Export Order
+deactivate API
+UI --> Exporter: Batch Reserved
+deactivate UI
+
+Exporter -> UI: Submit Lab Quality Inspection (Moisture <= 11%, 8mm Bold)
+activate UI
+UI -> API: POST /api/quality-records/
+activate API
+API -> DB: INSERT INTO quality_records (quality_status='APPROVED')
+activate DB
+DB --> API: 201 Created
+deactivate DB
+API --> UI: Quality Standard Approved
+deactivate API
+UI --> Exporter: Quality Verification Passed
+deactivate UI
+
+Exporter -> UI: Upload Regulatory Compliance Documents (Phytosanitary, Origin, Invoice)
+activate UI
+UI -> API: POST /api/export-documents/
+activate API
+API -> DB: INSERT INTO export_documents (status='VERIFIED')
+activate DB
+DB --> API: 201 Created
+deactivate DB
+API --> UI: Export Clearances Verified
+deactivate API
+UI --> Exporter: Documents Ready
+deactivate UI
+
+== 4. Shipment Tracking & Buyer Delivery Confirmation ==
+Exporter -> UI: Dispatch Shipment (Carrier, Tracking #, Departure Port)
+activate UI
+UI -> API: POST /api/shipments/
+activate API
+API -> DB: INSERT INTO shipment_records (status='SHIPPED')
+activate DB
+API -> DB: UPDATE export_orders (status='SHIPPED')
+DB --> API: 200 OK
+deactivate DB
+API --> UI: Shipment Tracking Active
+deactivate API
+UI --> Exporter: Cargo In Transit
+deactivate UI
+
+Exporter -> UI: Send Secure Delivery Token Link
+activate UI
+UI -> API: POST /api/export-orders/{id}/send-delivery-token/
+activate API
+API -> DB: INSERT INTO buyer_delivery_tokens (token_hash, expires_at)
+activate DB
+DB --> API: 201 Created
+deactivate DB
+API -> API: Dispatch Tokenized Confirmation Email to Buyer
+API --> UI: Confirmation Link Sent
+deactivate API
+UI --> Exporter: Notification Dispatched
+deactivate UI
+
+Buyer -> UI: Open Tokenized Confirmation Link
+activate UI
+UI -> API: GET /api/delivery-confirmations/{token}/
+activate API
+API -> DB: Validate Token & Fetch Order Details
+activate DB
+DB --> API: Token Valid & Order Details
+deactivate DB
+API --> UI: Display Cargo Details & Confirmation Form
+deactivate API
+UI --> Buyer: Present Confirmation Portal
+deactivate UI
+
+Buyer -> UI: Submit Confirmation (Condition: GOOD, Receipt Upload)
+activate UI
+UI -> API: POST /api/delivery-confirmations/{token}/confirm/
+activate API
+API -> DB: INSERT INTO buyer_delivery_confirmations
+activate DB
+API -> DB: UPDATE buyer_delivery_tokens (is_used=TRUE)
+API -> DB: UPDATE export_orders (status='COMPLETED')
+DB --> API: 200 OK (Contract Complete)
+deactivate DB
+API --> UI: Delivery Successfully Confirmed
+deactivate API
+UI --> Buyer: Confirmation Receipt Displayed
+deactivate UI
+@enduml

@@ -75,6 +75,7 @@ urlpatterns = [
     path('trader/transactions', views.trader_transactions_list),
     path('trader/exporters', views.trader_get_exporters),
     path('trader/export-supply', views.trader_export_supply_list_create),
+    path('trader/export-supply/<int:request_id>/action', views.trader_export_supply_action),
     path('trader/reports', views.trader_reports),
     path('trader/notifications', views.trader_notifications),
     path('trader/profile', views.trader_update_profile),
@@ -101,5 +102,12 @@ urlpatterns = [
     path('exporter/reports', views.exporter_reports),
     path('exporter/notifications', views.exporter_notifications),
     path('exporter/profile', views.exporter_update_profile),
+
+    # Buyer Delivery Confirmation Routes
+    path('buyer/delivery/validate', views.buyer_delivery_token_validate),
+    path('buyer/delivery/validate/<str:token>', views.buyer_delivery_token_validate),
+    path('buyer/delivery/confirm', views.buyer_delivery_confirm),
+    path('exporter/orders/<int:order_id>/send-confirmation', views.exporter_order_resend_delivery_confirmation),
+    path('exporter/orders/<int:order_id>/delivery-confirmation', views.exporter_order_delivery_confirmation_detail),
 ]
 

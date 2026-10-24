@@ -1,0 +1,277 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 920" width="1140" height="920">
+    <defs>
+        <marker id="compDiamond" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <polygon points="0,6 6,0 12,6 6,12" fill="#000" />
+        </marker>
+        <marker id="aggDiamond" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+            <polygon points="0,6 6,0 12,6 6,12" fill="#fff" stroke="#000" stroke-width="1.2" />
+        </marker>
+        <marker id="clsArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#000" />
+        </marker>
+    </defs>
+
+    <text x="570" y="28" font-family="'Times New Roman', serif" font-size="16" font-weight="bold" text-anchor="middle">Class Diagram: CardaLink Core Domain Models &amp; Architectural Relationships</text>
+
+    <!-- CLASS 1: User -->
+    <g transform="translate(30, 50)">
+        <rect x="0" y="0" width="230" height="185" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">User</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+full_name : Varchar(150)</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+email : Varchar(255) [UQ]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+phone : Varchar(20)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+role : Varchar(20)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+password_hash : Varchar(255)</text>
+        <text x="8" y="122" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(20)</text>
+        <line x1="0" y1="130" x2="230" y2="130" stroke="#000" stroke-width="1"/>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+login() : Boolean</text>
+        <text x="8" y="160" font-family="'Times New Roman', serif" font-size="9.5">+register() : Boolean</text>
+        <text x="8" y="174" font-family="'Times New Roman', serif" font-size="9.5">+verifyRole() : Boolean</text>
+    </g>
+
+    <!-- CLASS 2: Plantation -->
+    <g transform="translate(30, 275)">
+        <rect x="0" y="0" width="230" height="160" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">Plantation</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+farmer_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+name : Varchar(150)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+location : Varchar(255)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+area_acres : Decimal(8,2)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+variety : Varchar(100)</text>
+        <line x1="0" y1="116" x2="230" y2="116" stroke="#000" stroke-width="1"/>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+addPlantation() : Void</text>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+updateStatus() : Void</text>
+    </g>
+
+    <!-- CLASS 3: HarvestRecord -->
+    <g transform="translate(30, 475)">
+        <rect x="0" y="0" width="230" height="175" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">HarvestRecord</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+farmer_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+plantation_id : BigInt [FK]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+harvest_date : Date</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+fresh_quantity_kg : Decimal</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+dried_quantity_kg : Decimal</text>
+        <text x="8" y="122" font-family="'Times New Roman', serif" font-size="9.5">+grade : Varchar(50)</text>
+        <line x1="0" y1="130" x2="230" y2="130" stroke="#000" stroke-width="1"/>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+calculateYield() : Decimal</text>
+        <text x="8" y="160" font-family="'Times New Roman', serif" font-size="9.5">+logHarvest() : Void</text>
+    </g>
+
+    <!-- CLASS 4: InventoryItem (Middle Left) -->
+    <g transform="translate(320, 50)">
+        <rect x="0" y="0" width="240" height="185" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="240" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="120" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">InventoryItem</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+owner_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+variety : Varchar(100)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+quantity_kg : Decimal(10,2)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+grade : Varchar(50)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+purchase_price_per_kg : Decimal</text>
+        <text x="8" y="122" font-family="'Times New Roman', serif" font-size="9.5">+batch_code : Varchar(50) [UQ]</text>
+        <line x1="0" y1="130" x2="240" y2="130" stroke="#000" stroke-width="1"/>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+allocateStock() : Boolean</text>
+        <text x="8" y="160" font-family="'Times New Roman', serif" font-size="9.5">+deductQuantity() : Void</text>
+        <text x="8" y="174" font-family="'Times New Roman', serif" font-size="9.5">+transferOwnership() : Void</text>
+    </g>
+
+    <!-- CLASS 5: MarketplaceListing (Middle Left) -->
+    <g transform="translate(320, 275)">
+        <rect x="0" y="0" width="240" height="160" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="240" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="120" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">MarketplaceListing</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+farmer_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+variety : Varchar(100)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+available_quantity_kg : Decimal</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+price_per_kg : Decimal(10,2)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(30)</text>
+        <line x1="0" y1="116" x2="240" y2="116" stroke="#000" stroke-width="1"/>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+publishListing() : Void</text>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+reserveQuantity() : Void</text>
+    </g>
+
+    <!-- CLASS 6: PurchaseRequest -->
+    <g transform="translate(320, 475)">
+        <rect x="0" y="0" width="240" height="175" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="240" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="120" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">PurchaseRequest</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+trader_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+farmer_id : BigInt [FK]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+requested_quantity_kg : Decimal</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+total_amount : Decimal(12,2)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+payment_status : Varchar(30)</text>
+        <text x="8" y="122" font-family="'Times New Roman', serif" font-size="9.5">+pickup_status : Varchar(30)</text>
+        <line x1="0" y1="130" x2="240" y2="130" stroke="#000" stroke-width="1"/>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+confirmHandover() : Void</text>
+        <text x="8" y="160" font-family="'Times New Roman', serif" font-size="9.5">+confirmPickup() : Void</text>
+    </g>
+
+    <!-- CLASS 7: InternationalBuyer (Right Column) -->
+    <g transform="translate(620, 50)">
+        <rect x="0" y="0" width="230" height="160" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">InternationalBuyer</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+exporter_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+name : Varchar(150)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+company_name : Varchar(150)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+country : Varchar(100)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+email : Varchar(255)</text>
+        <line x1="0" y1="116" x2="230" y2="116" stroke="#000" stroke-width="1"/>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+registerBuyer() : Void</text>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+getBuyerHistory() : List</text>
+    </g>
+
+    <!-- CLASS 8: ExportOrder (Right Column) -->
+    <g transform="translate(620, 255)">
+        <rect x="0" y="0" width="230" height="185" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">ExportOrder</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+order_code : Varchar(50) [UQ]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+exporter_id : BigInt [FK]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+buyer_id : BigInt [FK]</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+destination_port : Varchar(100)</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+total_value_usd : Decimal</text>
+        <text x="8" y="122" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(30)</text>
+        <line x1="0" y1="130" x2="230" y2="130" stroke="#000" stroke-width="1"/>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+createOrder() : Void</text>
+        <text x="8" y="160" font-family="'Times New Roman', serif" font-size="9.5">+updateStatus() : Void</text>
+        <text x="8" y="174" font-family="'Times New Roman', serif" font-size="9.5">+generateToken() : String</text>
+    </g>
+
+    <!-- CLASS 9: QualityRecord (Far Right) -->
+    <g transform="translate(890, 50)">
+        <rect x="0" y="0" width="220" height="160" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="220" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="110" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">QualityRecord</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+export_order_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+moisture_percentage : Decimal</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+size_mm : Varchar(50)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+quality_status : Varchar(30)</text>
+        <line x1="0" y1="102" x2="220" y2="102" stroke="#000" stroke-width="1"/>
+        <text x="8" y="118" font-family="'Times New Roman', serif" font-size="9.5">+inspectBatch() : Boolean</text>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+issueCertificate() : Void</text>
+    </g>
+
+    <!-- CLASS 10: ExportDocument -->
+    <g transform="translate(890, 255)">
+        <rect x="0" y="0" width="220" height="150" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="220" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="110" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">ExportDocument</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+export_order_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+document_type : Varchar(100)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+document_number : Varchar(100)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(30)</text>
+        <line x1="0" y1="102" x2="220" y2="102" stroke="#000" stroke-width="1"/>
+        <text x="8" y="118" font-family="'Times New Roman', serif" font-size="9.5">+uploadDocument() : Void</text>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+verifyFiling() : Void</text>
+    </g>
+
+    <!-- CLASS 11: ShipmentRecord -->
+    <g transform="translate(890, 455)">
+        <rect x="0" y="0" width="220" height="160" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="220" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="110" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">ShipmentRecord</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+export_order_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+tracking_number : Varchar [UQ]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+carrier : Varchar(100)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(30)</text>
+        <line x1="0" y1="102" x2="220" y2="102" stroke="#000" stroke-width="1"/>
+        <text x="8" y="118" font-family="'Times New Roman', serif" font-size="9.5">+dispatchCargo() : Void</text>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+updateMilestone() : Void</text>
+    </g>
+
+    <!-- CLASS 12: BuyerDeliveryConfirmation -->
+    <g transform="translate(620, 485)">
+        <rect x="0" y="0" width="230" height="165" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="230" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="115" y="17" font-family="'Times New Roman', serif" font-size="11" font-weight="bold" text-anchor="middle">BuyerDeliveryConfirmation</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+export_order_id : BigInt [FK]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+confirmation_ref : Varchar [UQ]</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+quantity_received_kg : Decimal</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+delivery_condition : Varchar</text>
+        <text x="8" y="108" font-family="'Times New Roman', serif" font-size="9.5">+is_dispute : Boolean</text>
+        <line x1="0" y1="116" x2="230" y2="116" stroke="#000" stroke-width="1"/>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+confirmDelivery() : Void</text>
+        <text x="8" y="146" font-family="'Times New Roman', serif" font-size="9.5">+raiseDispute() : Void</text>
+    </g>
+
+    <!-- CLASS 13: TransactionRecord (Bottom row) -->
+    <g transform="translate(320, 700)">
+        <rect x="0" y="0" width="240" height="145" fill="#fff" stroke="#000" stroke-width="1.5"/>
+        <line x1="0" y1="24" x2="240" y2="24" stroke="#000" stroke-width="1.2"/>
+        <text x="120" y="17" font-family="'Times New Roman', serif" font-size="12" font-weight="bold" text-anchor="middle">TransactionRecord</text>
+        <text x="8" y="38" font-family="'Times New Roman', serif" font-size="9.5">+id : BigInt [PK]</text>
+        <text x="8" y="52" font-family="'Times New Roman', serif" font-size="9.5">+transaction_code : Varchar [UQ]</text>
+        <text x="8" y="66" font-family="'Times New Roman', serif" font-size="9.5">+amount : Decimal(12,2)</text>
+        <text x="8" y="80" font-family="'Times New Roman', serif" font-size="9.5">+payment_method : Varchar(50)</text>
+        <text x="8" y="94" font-family="'Times New Roman', serif" font-size="9.5">+status : Varchar(30)</text>
+        <line x1="0" y1="102" x2="240" y2="102" stroke="#000" stroke-width="1"/>
+        <text x="8" y="118" font-family="'Times New Roman', serif" font-size="9.5">+logTransaction() : Void</text>
+        <text x="8" y="132" font-family="'Times New Roman', serif" font-size="9.5">+auditSettlement() : Void</text>
+    </g>
+
+    <!-- RELATIONSHIPS -->
+    <!-- User to Plantation -->
+    <line x1="145" y1="235" x2="145" y2="275" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="130" y="248" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="130" y="268" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- Plantation to HarvestRecord -->
+    <line x1="145" y1="435" x2="145" y2="475" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="130" y="448" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="130" y="468" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- User to InventoryItem -->
+    <line x1="260" y1="120" x2="320" y2="120" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="270" y="115" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="305" y="115" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- User to MarketplaceListing -->
+    <path d="M 240 235 L 240 355 L 320 355" fill="none" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="290" y="348" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- Marketplace to PurchaseRequest -->
+    <line x1="440" y1="435" x2="440" y2="475" stroke="#000" stroke-width="1.3" marker-start="url(#aggDiamond)"/>
+    <text x="448" y="448" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="448" y="468" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- InternationalBuyer to ExportOrder -->
+    <line x1="735" y1="210" x2="735" y2="255" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="745" y="225" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="745" y="248" font-family="'Times New Roman', serif" font-size="9">0..*</text>
+
+    <!-- ExportOrder to QualityRecord -->
+    <path d="M 850 290 L 890 130" fill="none" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="860" y="280" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="878" y="145" font-family="'Times New Roman', serif" font-size="9">1..*</text>
+
+    <!-- ExportOrder to ExportDocument -->
+    <line x1="850" y1="330" x2="890" y2="330" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="860" y="322" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="878" y="322" font-family="'Times New Roman', serif" font-size="9">1..*</text>
+
+    <!-- ExportOrder to ShipmentRecord -->
+    <path d="M 850 380 L 890 535" fill="none" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="860" y="395" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="878" y="525" font-family="'Times New Roman', serif" font-size="9">1</text>
+
+    <!-- ExportOrder to BuyerDeliveryConfirmation -->
+    <line x1="735" y1="440" x2="735" y2="485" stroke="#000" stroke-width="1.3" marker-start="url(#compDiamond)"/>
+    <text x="745" y="455" font-family="'Times New Roman', serif" font-size="9">1</text>
+    <text x="745" y="475" font-family="'Times New Roman', serif" font-size="9">0..1</text>
+</svg>

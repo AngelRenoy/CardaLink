@@ -1,0 +1,353 @@
+@startuml CardaLink_Class_Diagram
+!theme plain
+skinparam shadowing false
+skinparam roundcorner 6
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 60
+
+skinparam class {
+    BorderThickness 1.5
+    ArrowColor #2C3E50
+    ArrowThickness 1.3
+}
+
+' ================= TOP ROW: USER & ROLE SUBCLASSES =================
+class "User" as User #FFF2CC ##D6B656 {
+    + user_id : int
+    + name : varchar
+    + email : varchar
+    + password : varchar
+    + phone_no : varchar
+    + role : enum
+    + status : enum
+    + created_at : timestamp
+    --
+    + login() : boolean
+    + logout() : void
+    + updateProfile() : void
+}
+
+class "Farmer" as Farmer #D5E8D4 ##82B366 {
+    + farmer_id : int
+    + farm_location : varchar
+    + kisan_card_no : varchar
+    + total_acreage : decimal
+    + primary_variety : varchar
+    --
+    + addPlantation() : void
+    + logHarvest() : void
+    + recordAgrochemical() : void
+    + createListing() : void
+    + confirmHandover() : void
+}
+
+class "Trader" as Trader #DAE8FC ##6C8EBF {
+    + trader_id : int
+    + trade_license_no : varchar
+    + business_name : varchar
+    + warehouse_address : varchar
+    + gst_tax_id : varchar
+    --
+    + browseListings() : list
+    + placePurchaseRequest() : void
+    + manageInventory() : void
+    + confirmPickup() : void
+    + requestExportSupply() : void
+}
+
+class "Exporter" as Exporter #E1D5E7 ##9673A6 {
+    + exporter_id : int
+    + iec_code : varchar
+    + spices_board_reg : varchar
+    + company_name : varchar
+    + export_port : varchar
+    --
+    + addInternationalBuyer() : void
+    + createExportOrder() : void
+    + manageQualityCheck() : void
+    + uploadExportDocs() : void
+    + trackShipment() : void
+}
+
+class "Administrator" as Administrator #F8CECC ##B85450 {
+    + admin_id : int
+    + department : varchar
+    + access_level : varchar
+    --
+    + manageUsers() : void
+    + approveVerifications() : void
+    + monitorTransactions() : void
+    + viewAuditLogs() : void
+    + sendNotifications() : void
+}
+
+class "Notification" as Notification #D0ECE7 ##48C9B0 {
+    + notification_id : int
+    + user_id : int
+    + title : varchar
+    + message : text
+    + category : enum
+    + is_read : boolean
+    + created_at : timestamp
+    --
+    + markAsRead() : void
+    + clearNotification() : void
+}
+
+' ================= MIDDLE TIER: FARMING, TRADING & EXPORT =================
+class "Plantation" as Plantation #FFF2CC ##D6B656 {
+    + plantation_id : int
+    + farmer_id : int
+    + name : varchar
+    + location : varchar
+    + area_acres : decimal
+    + number_of_plants : int
+    + variety : varchar
+    + status : enum
+    --
+    + addPlantation() : void
+    + updatePlantation() : void
+    + viewHarvestHistory() : list
+}
+
+class "HarvestRecord" as HarvestRecord #FFF2CC ##D6B656 {
+    + harvest_id : int
+    + farmer_id : int
+    + plantation_id : int
+    + harvest_date : date
+    + fresh_qty_kg : decimal
+    + dried_qty_kg : decimal
+    + variety : varchar
+    + grade : varchar
+    + notes : text
+    --
+    + logHarvest() : void
+    + calculateYieldRatio() : decimal
+    + markReadyForSale() : void
+}
+
+class "AgrochemicalUsage" as AgrochemicalUsage #FFF2CC ##D6B656 {
+    + usage_id : int
+    + farmer_id : int
+    + plantation_id : int
+    + usage_type : enum
+    + chemical_name : varchar
+    + quantity : decimal
+    + application_date : date
+    + cost : decimal
+    --
+    + logApplication() : void
+    + getUsageHistory() : list
+}
+
+class "MarketplaceListing" as MarketplaceListing #D5E8D4 ##82B366 {
+    + listing_id : int
+    + farmer_id : int
+    + variety : varchar
+    + available_qty_kg : decimal
+    + price_per_kg : decimal
+    + grade : varchar
+    + plantation_id : int
+    + status : enum
+    --
+    + publishListing() : void
+    + updateListing() : void
+    + reserveQuantity() : void
+}
+
+class "PurchaseRequest" as PurchaseRequest #D5E8D4 ##82B366 {
+    + request_id : int
+    + trader_id : int
+    + farmer_id : int
+    + listing_id : int
+    + requested_qty_kg : decimal
+    + price_per_kg : decimal
+    + total_amount : decimal
+    + payment_status : enum
+    + pickup_status : enum
+    --
+    + createRequest() : void
+    + processPayment() : void
+    + confirmHandover() : void
+    + confirmPickup() : void
+}
+
+class "InventoryItem" as InventoryItem #DAE8FC ##6C8EBF {
+    + inventory_id : int
+    + owner_id : int
+    + source_farmer_id : int
+    + variety : varchar
+    + quantity_kg : decimal
+    + grade : varchar
+    + purchase_price : decimal
+    + batch_code : varchar
+    + status : enum
+    --
+    + allocateStock() : boolean
+    + deductQuantity() : void
+    + transferToExport() : void
+}
+
+class "InternationalBuyer" as InternationalBuyer #DAE8FC ##6C8EBF {
+    + buyer_id : int
+    + exporter_id : int
+    + name : varchar
+    + company_name : varchar
+    + country : varchar
+    + email : varchar
+    + phone : varchar
+    + address : text
+    --
+    + createBuyer() : void
+    + updateBuyerProfile() : void
+    + getOrderHistory() : list
+}
+
+class "ExportOrder" as ExportOrder #F8CECC ##B85450 {
+    + order_id : int
+    + order_code : varchar
+    + exporter_id : int
+    + buyer_id : int
+    + inventory_item_id : int
+    + destination_port : varchar
+    + incoterms : varchar
+    + variety : varchar
+    + quantity_kg : decimal
+    + total_value_usd : decimal
+    + status : enum
+    --
+    + createExportOrder() : void
+    + updateStatus() : void
+    + issueInvoice() : void
+}
+
+class "QualityRecord" as QualityRecord #D0ECE7 ##48C9B0 {
+    + quality_id : int
+    + export_order_id : int
+    + variety : varchar
+    + grade : varchar
+    + moisture_pct : decimal
+    + size_mm : varchar
+    + color : varchar
+    + quality_status : enum
+    + inspection_date : date
+    + inspector_name : varchar
+    --
+    + performInspection() : void
+    + approveQuality() : void
+    + rejectQuality() : void
+}
+
+class "ExportDocument" as ExportDocument #D0ECE7 ##48C9B0 {
+    + doc_id : int
+    + export_order_id : int
+    + doc_type : varchar
+    + document_name : varchar
+    + document_number : varchar
+    + file_url : text
+    + status : enum
+    + issued_date : date
+    --
+    + uploadDocument() : void
+    + verifyDocument() : void
+    + downloadFile() : void
+}
+
+' ================= BOTTOM TIER: LOGISTICS, AUDIT & REPORTS =================
+class "ShipmentRecord" as ShipmentRecord #E1D5E7 ##9673A6 {
+    + shipment_id : int
+    + export_order_id : int
+    + tracking_number : varchar
+    + carrier : varchar
+    + shipping_method : varchar
+    + origin_port : varchar
+    + destination_port : varchar
+    + dispatch_date : date
+    + status : enum
+    --
+    + dispatchShipment() : void
+    + updateTracking() : void
+    + markDelivered() : void
+}
+
+class "BuyerDeliveryConfirmation" as BuyerDeliveryConfirmation #D5E8D4 ##82B366 {
+    + confirmation_id : int
+    + export_order_id : int
+    + buyer_id : int
+    + confirmation_ref : varchar
+    + qty_received_kg : decimal
+    + delivery_condition : enum
+    + is_dispute : boolean
+    + comments : text
+    + confirmed_at : timestamp
+    --
+    + submitConfirmation() : void
+    + verifyToken() : boolean
+    + logDispute() : void
+}
+
+class "TransactionRecord" as TransactionRecord #FFF2CC ##D6B656 {
+    + transaction_id : int
+    + transaction_code : varchar
+    + sender_id : int
+    + receiver_id : int
+    + amount : decimal
+    + payment_method : varchar
+    + status : enum
+    + created_at : timestamp
+    --
+    + processTransaction() : void
+    + verifyPayment() : void
+    + auditLog() : void
+}
+
+class "SupplyChainReport" as SupplyChainReport #F8CECC ##B85450 {
+    + report_id : int
+    + generated_by : int
+    + report_type : enum
+    + start_date : date
+    + end_date : date
+    + volume_kg : decimal
+    + revenue : decimal
+    --
+    + generateReport() : void
+    + exportPDF() : void
+    + exportExcel() : void
+}
+
+' ================= INHERITANCE / GENERALIZATION =================
+User <|-- Farmer
+User <|-- Trader
+User <|-- Exporter
+User <|-- Administrator
+
+' ================= ASSOCIATIONS & COMPOSITIONS =================
+User "1" *-- "0..*" Notification : receives >
+
+Farmer "1" *-- "0..*" Plantation : manages >
+Plantation "1" *-- "0..*" HarvestRecord : yields >
+Plantation "1" *-- "0..*" AgrochemicalUsage : treated with >
+
+Farmer "1" *-- "0..*" MarketplaceListing : publishes >
+MarketplaceListing "1" <-- "0..*" PurchaseRequest : targets >
+Trader "1" *-- "0..*" PurchaseRequest : submits >
+
+Trader "1" *-- "0..*" InventoryItem : holds >
+Exporter "1" *-- "0..*" InternationalBuyer : manages >
+
+InternationalBuyer "1" <-- "0..*" ExportOrder : orders >
+Exporter "1" *-- "0..*" ExportOrder : coordinates >
+InventoryItem "1" <-- "0..*" ExportOrder : allocated to >
+
+ExportOrder "1" *-- "1..*" QualityRecord : inspected by >
+ExportOrder "1" *-- "1..*" ExportDocument : cleared with >
+ExportOrder "1" *-- "1" ShipmentRecord : dispatched via >
+ExportOrder "1" *-- "0..1" BuyerDeliveryConfirmation : confirmed by >
+
+ExportOrder ..> TransactionRecord : generates payment >
+Administrator "1" --> "0..*" SupplyChainReport : generates >
+@enduml

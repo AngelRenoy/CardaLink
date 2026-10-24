@@ -1,0 +1,113 @@
+@startuml 4.2.3_state_chart_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+[*] --> DRAFT : Create Export Order Agreement
+
+state DRAFT {
+    DRAFT : Exporter enters buyer, cardamom variety,
+    DRAFT : quantity, Incoterms, and destination port
+}
+
+DRAFT --> CONFIRMED : Exporter formalizes order\n[Buyer agreement verified]
+
+state CONFIRMED {
+    CONFIRMED : Export contract legally binding
+    CONFIRMED : Allocation of inventory batch
+}
+
+CONFIRMED --> QUALITY_CHECK : Initiate laboratory testing\n[Staged for quality sampling]
+
+state QUALITY_CHECK {
+    QUALITY_CHECK : Testing moisture percentage (<= 11%)
+    QUALITY_CHECK : Sizing capsule diameter (>= 8mm Bold)
+    QUALITY_CHECK : Color evaluation (Deep Green)
+}
+
+QUALITY_CHECK --> QUALITY_APPROVED : Moisture <= 11% & Size approved\n[Lab test passed]
+QUALITY_CHECK --> QUALITY_REJECTED : Moisture > 11% or defects found\n[Lab test failed]
+
+state QUALITY_REJECTED {
+    QUALITY_REJECTED : Lot non-compliant for export
+    QUALITY_REJECTED : Needs re-drying or grade downgrade
+}
+
+QUALITY_REJECTED --> CANCELLED : Unsalvageable lot
+QUALITY_REJECTED --> QUALITY_CHECK : Re-cured and re-submitted
+
+state QUALITY_APPROVED {
+    QUALITY_APPROVED : Official lab clearance granted
+}
+
+QUALITY_APPROVED --> PACKAGING : Stage for packaging\n[Vacuum packing scheduled]
+
+state PACKAGING {
+    PACKAGING : Packing into aroma-retentive bags
+    PACKAGING : Tamper-evident seals applied
+}
+
+PACKAGING --> DOCUMENTS_PENDING : Packaging completed\n[Clearances required]
+
+state DOCUMENTS_PENDING {
+    DOCUMENTS_PENDING : Preparing Phytosanitary Certificate,
+    DOCUMENTS_PENDING : Certificate of Origin, Shipping Bill, Invoice
+}
+
+DOCUMENTS_PENDING --> READY_FOR_SHIPMENT : All statutory certificates verified\n[Customs clearance achieved]
+
+state READY_FOR_SHIPMENT {
+    READY_FOR_SHIPMENT : Cargo staged at departure port terminal
+}
+
+READY_FOR_SHIPMENT --> SHIPPED : Vessel / aircraft dispatched\n[Tracking number assigned]
+
+state SHIPPED {
+    SHIPPED : Bill of lading issued
+}
+
+SHIPPED --> IN_TRANSIT : Cross-border freight carriage\n[Cargo tracking milestone updated]
+
+state IN_TRANSIT {
+    IN_TRANSIT : Cargo en route via sea or air freight
+}
+
+IN_TRANSIT --> ARRIVED : Cargo docked at destination port\n[Terminal discharge complete]
+
+state ARRIVED {
+    ARRIVED : Cargo at destination customs port
+}
+
+ARRIVED --> AWAITING_BUYER_CONFIRMATION : Secure delivery token emailed to buyer\n[72-hour validation active]
+
+state AWAITING_BUYER_CONFIRMATION {
+    AWAITING_BUYER_CONFIRMATION : Buyer inspecting cargo at delivery
+}
+
+AWAITING_BUYER_CONFIRMATION --> DELIVERED : Buyer confirms good condition\n[Digital token verified]
+AWAITING_BUYER_CONFIRMATION --> DELIVERY_DISPUTE : Buyer flags damage or shortage\n[Dispute ticket created]
+
+state DELIVERY_DISPUTE {
+    DELIVERY_DISPUTE : Joint survey & claim review
+}
+
+DELIVERY_DISPUTE --> DELIVERED : Mutual settlement agreed
+
+state DELIVERED {
+    DELIVERED : Goods received and acknowledged
+}
+
+DELIVERED --> COMPLETED : Financial remittance settled\n[Transaction ledger closed]
+
+state COMPLETED {
+    COMPLETED : Export transaction finalized
+}
+
+state CANCELLED {
+    CANCELLED : Order terminated
+}
+
+COMPLETED --> [*]
+CANCELLED --> [*]
+@enduml

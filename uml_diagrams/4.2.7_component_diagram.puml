@@ -1,0 +1,87 @@
+@startuml 4.2.7_component_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+package "Client Presentation Tier (React.js SPA / Vite)" {
+    component [Auth & Role Guard\n(AppRoutes.jsx)] as COMP_Router
+    component [Farmer Dashboard\n(FarmerDashboard.jsx)] as COMP_FarmerUI
+    component [Trader Dashboard\n(TraderDashboard.jsx)] as COMP_TraderUI
+    component [Exporter Dashboard\n(ExporterDashboard.jsx)] as COMP_ExporterUI
+    component [Admin Dashboard\n(AdminDashboard.jsx)] as COMP_AdminUI
+    component [Buyer Confirmation Portal\n(BuyerDeliveryConfirmationPage.jsx)] as COMP_BuyerUI
+    component [API Client Service\n(api.js / Axios Interceptor)] as COMP_APIClient
+}
+
+COMP_FarmerUI --> COMP_APIClient
+COMP_TraderUI --> COMP_APIClient
+COMP_ExporterUI --> COMP_APIClient
+COMP_AdminUI --> COMP_APIClient
+COMP_BuyerUI --> COMP_APIClient
+COMP_Router --> COMP_APIClient
+
+package "Backend Application Tier (Django REST Framework)" {
+    component [API Gateway & URL Router\n(urls.py / cardalink_server)] as COMP_APIGateway
+    component [Authentication & JWT Middleware\n(views.login / register)] as COMP_AuthService
+    component [Plantation & Harvest Module\n(views.py / HarvestRecord)] as COMP_PlantationService
+    component [Marketplace & Procurement Module\n(views.py / PurchaseRequest)] as COMP_TradeService
+    component [Export Management Module\n(views.py / ExportOrder)] as COMP_ExportService
+    component [Quality & Packaging Module\n(views.py / QualityRecord)] as COMP_QualityService
+    component [Shipment & Logistics Module\n(views.py / ShipmentRecord)] as COMP_ShipmentService
+    component [Delivery Confirmation Engine\n(delivery_service.py)] as COMP_DeliveryService
+    component [Serializers & Data Validators\n(serializers.py)] as COMP_Serializers
+    component [Django ORM Engine\n(models.py)] as COMP_ORM
+}
+
+COMP_APIClient ..> COMP_APIGateway : <<HTTP/REST JSON>>
+
+COMP_APIGateway --> COMP_AuthService
+COMP_APIGateway --> COMP_PlantationService
+COMP_APIGateway --> COMP_TradeService
+COMP_APIGateway --> COMP_ExportService
+COMP_APIGateway --> COMP_QualityService
+COMP_APIGateway --> COMP_ShipmentService
+COMP_APIGateway --> COMP_DeliveryService
+
+COMP_PlantationService --> COMP_Serializers
+COMP_TradeService --> COMP_Serializers
+COMP_ExportService --> COMP_Serializers
+COMP_QualityService --> COMP_Serializers
+COMP_ShipmentService --> COMP_Serializers
+COMP_DeliveryService --> COMP_Serializers
+
+COMP_Serializers --> COMP_ORM
+
+package "Database Tier (PostgreSQL Relational DB)" {
+    database "PostgreSQL Instance\n(cardalink_db)" {
+        [users & identities]
+        [plantations & harvests]
+        [inventory & marketplace]
+        [purchase_requests & export_supplies]
+        [export_orders & international_buyers]
+        [quality_records & export_documents]
+        [shipment_records & delivery_confirmations]
+        [transaction_records & audit_logs]
+    }
+}
+
+COMP_ORM --> [users & identities] : SQL Queries
+COMP_ORM --> [plantations & harvests]
+COMP_ORM --> [inventory & marketplace]
+COMP_ORM --> [purchase_requests & export_supplies]
+COMP_ORM --> [export_orders & international_buyers]
+COMP_ORM --> [quality_records & export_documents]
+COMP_ORM --> [shipment_records & delivery_confirmations]
+COMP_ORM --> [transaction_records & audit_logs]
+
+package "External Third-Party Services" {
+    component [Google Identity Services\n(OAuth 2.0 Auth Server)] as EXT_Google
+    component [Razorpay Payment Gateway\n(Razorpay Cloud API)] as EXT_Razorpay
+    component [SMTP Email Service\n(Gmail / Transactional Mail)] as EXT_SMTP
+}
+
+COMP_AuthService ..> EXT_Google : <<OAuth 2.0 Token Exchange>>
+COMP_TradeService ..> EXT_Razorpay : <<Payment Verification>>
+COMP_DeliveryService ..> EXT_SMTP : <<Tokenized Confirmation Email>>
+@enduml

@@ -1,0 +1,76 @@
+@startuml 4.2.4_activity_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+|Farmer|
+start
+:Harvest fresh cardamom capsules;
+:Cure and dry in curing chamber;
+:Record harvest details (fresh/dry kg, variety, grade);
+:Update farmer inventory ledger;
+:Post cardamom lot on marketplace;
+
+|Trader|
+:Browse marketplace listings;
+:Select cardamom lot & specify quantity;
+:Submit purchase procurement request;
+if (Select Payment Method) then (Online)
+    :Pay via Razorpay Gateway;
+else (Direct)
+    :Choose Direct Cash / Bank Transfer;
+endif
+:Settle payment to farmer;
+
+|Farmer|
+:Verify payment & pack stock;
+:Confirm physical stock handover;
+
+|Trader|
+:Inspect stock & confirm pickup;
+:Receive lot into trader warehouse inventory;
+:Receive export supply request from Exporter;
+:Fulfill supply request & transfer stock;
+
+|Exporter|
+:Register international buyer profile;
+:Create export order (Incoterms, USD value, Port);
+:Allocate inventory batch from trader;
+:Initiate laboratory quality inspection;
+
+|Quality & Compliance|
+:Inspect moisture percentage (<= 11%);
+:Measure capsule diameter (>= 8mm);
+:Evaluate surface color (Deep Green);
+if (Quality criteria met?) then (Yes)
+    :Issue Quality Approval Certificate;
+else (No)
+    :Issue Quality Rejection Notice;
+    :Re-cure or re-grade lot;
+    detach
+endif
+:Vacuum seal in food-grade packaging;
+:Apply tamper-evident batch barcodes;
+:Upload Phytosanitary Certificate;
+:Upload Certificate of Origin & Invoice;
+
+|Logistics & International Buyer|
+:Book ocean freight / air cargo;
+:Dispatch consignment from departure port;
+:Update shipment tracking number;
+:Generate secure 72-hr buyer delivery token;
+:Email delivery confirmation link to buyer;
+:Cargo arrives at overseas destination port;
+:Buyer inspects delivered cardamom consignment;
+if (Cargo condition satisfactory?) then (Yes)
+    :Submit delivery confirmation (GOOD);
+else (Dispute)
+    :Raise delivery dispute (DAMAGED/PARTIAL);
+    :Submit inspection evidence photo/receipt;
+    :Resolve claim with exporter;
+endif
+:Update export order status to COMPLETED;
+:Record financial settlement in transaction ledger;
+stop
+@enduml

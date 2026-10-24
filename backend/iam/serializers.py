@@ -3,7 +3,8 @@ from iam.models import (
     User, AuditLog, CardamomVariety, Plantation, HarvestCycle, HarvestRecord, InventoryItem,
     AgrochemicalUsage, IrrigationRecord, ExpenseRecord, SaleRecord,
     TransactionRecord, ExportOrder, ExportDocument, ShipmentRecord, NotificationItem,
-    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord
+    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord,
+    BuyerDeliveryToken, BuyerDeliveryConfirmation
 )
 from iam.config import get_permissions_for_role
 
@@ -151,6 +152,33 @@ class ShipmentRecordSerializer(serializers.ModelSerializer):
         model = ShipmentRecord
         fields = ['id', 'export_order_id', 'order_code', 'tracking_number', 'carrier', 'shipping_method', 'status', 'origin', 'destination', 'dispatch_date', 'estimated_delivery', 'created_at']
 
+class BuyerDeliveryConfirmationSerializer(serializers.ModelSerializer):
+    evidence_file_url = serializers.SerializerMethodField()
+    condition_display = serializers.CharField(source='get_delivery_condition_display', read_only=True)
+
+    class Meta:
+        model = BuyerDeliveryConfirmation
+        fields = [
+            'id', 'confirmation_reference', 'quantity_ordered_kg', 'quantity_received_kg',
+            'delivery_condition', 'condition_display', 'comments', 'evidence_file',
+            'evidence_file_url', 'evidence_file_name', 'is_dispute', 'confirmed_at', 'ip_address'
+        ]
+
+    def get_evidence_file_url(self, obj):
+        if obj.evidence_file:
+            try:
+                return obj.evidence_file.url
+            except Exception:
+                return None
+        return None
+
+class BuyerDeliveryTokenSerializer(serializers.ModelSerializer):
+    is_valid = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = BuyerDeliveryToken
+        fields = ['id', 'token_type', 'expires_at', 'is_used', 'used_at', 'is_revoked', 'sent_to_email', 'created_at', 'is_valid']
+
 class ExportOrderSerializer(serializers.ModelSerializer):
     exporter_name = serializers.ReadOnlyField(source='exporter.full_name')
     buyer_company = serializers.ReadOnlyField(source='buyer.company_name')
@@ -158,6 +186,8 @@ class ExportOrderSerializer(serializers.ModelSerializer):
     packaging_records = PackagingRecordSerializer(many=True, read_only=True)
     documents = ExportDocumentSerializer(many=True, read_only=True)
     shipments = ShipmentRecordSerializer(many=True, read_only=True)
+    delivery_confirmation = BuyerDeliveryConfirmationSerializer(read_only=True)
+    active_token = serializers.SerializerMethodField()
 
     class Meta:
         model = ExportOrder
@@ -167,9 +197,16 @@ class ExportOrderSerializer(serializers.ModelSerializer):
             'destination_port', 'shipment_method', 'expected_shipment_date', 'incoterms',
             'inventory_item_id', 'cardamom_variety', 'grade', 'batch_code', 'quantity_kg',
             'price_per_kg', 'total_value_usd', 'order_date', 'payment_method', 'payment_status',
-            'payment_reference', 'payment_date', 'notes', 'status', 'quality_records',
-            'packaging_records', 'documents', 'shipments', 'created_at', 'updated_at'
+            'payment_reference', 'payment_date', 'notes', 'status', 'buyer_confirmed_order',
+            'buyer_confirmed_order_at', 'quality_records', 'packaging_records', 'documents',
+            'shipments', 'delivery_confirmation', 'active_token', 'created_at', 'updated_at'
         ]
+
+    def get_active_token(self, obj):
+        token = obj.delivery_tokens.filter(is_used=False, is_revoked=False).order_by('-created_at').first()
+        if token:
+            return BuyerDeliveryTokenSerializer(token).data
+        return None
 
 class NotificationItemSerializer(serializers.ModelSerializer):
     recipient_email = serializers.ReadOnlyField(source='recipient.email')
@@ -226,33 +263,113 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             return obj.completed_at.strftime('%d-%m-%Y')
         return None
 
+class ExporterDirectorySerializer(serializers.ModelSerializer):
+    company_name = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+    varieties_handled = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'full_name', 'company_name', 'email', 'phone', 'role', 'status',
+            'location', 'varieties_handled', 'description', 'created_at'
+        ]
+
+    def get_company_name(self, obj):
+        return getattr(obj, 'company_name', None) or obj.full_name
+
+    def get_location(self, obj):
+        return getattr(obj, 'location', None) or 'Cochin Port / Idukki, Kerala'
+
+    def get_varieties_handled(self, obj):
+        return ['Njallani Green Gold', 'AGEB 8mm Bold', 'Vanderperiyar Green']
+
+    def get_description(self, obj):
+        return getattr(obj, 'description', None) or 'Government & Spices Board registered Indian Green Cardamom Export House.'
+
 class ExportSupplyRequestSerializer(serializers.ModelSerializer):
     trader_name = serializers.ReadOnlyField(source='trader.full_name')
+    trader_business_name = serializers.SerializerMethodField()
     trader_email = serializers.ReadOnlyField(source='trader.email')
     trader_phone = serializers.ReadOnlyField(source='trader.phone')
     trader_location = serializers.SerializerMethodField()
     exporter_name = serializers.ReadOnlyField(source='exporter.full_name')
+    exporter_company_name = serializers.SerializerMethodField()
+    exporter_email = serializers.ReadOnlyField(source='exporter.email')
+    exporter_phone = serializers.ReadOnlyField(source='exporter.phone')
+    exporter_location = serializers.SerializerMethodField()
     request_date = serializers.SerializerMethodField()
+    payment_date = serializers.SerializerMethodField()
+    pickup_date = serializers.SerializerMethodField()
+    confirmation_date = serializers.SerializerMethodField()
+    pickup_status = serializers.SerializerMethodField()
 
     class Meta:
         model = ExportSupplyRequest
         fields = [
-            'id', 'trader_id', 'trader_name', 'trader_email', 'trader_phone', 'trader_location', 'exporter_id',
-            'exporter_name', 'inventory_item_id', 'variety', 'grade', 'quantity_kg', 'price_per_kg',
-            'total_amount', 'batch_code', 'expected_supply_date', 'payment_method', 'payment_status',
-            'payment_reference', 'notes', 'received_at', 'completed_at', 'status', 'request_date',
-            'created_at', 'updated_at'
+            'id', 'trader_id', 'trader_name', 'trader_business_name', 'trader_email', 'trader_phone', 'trader_location',
+            'exporter_id', 'exporter_name', 'exporter_company_name', 'exporter_email', 'exporter_phone', 'exporter_location',
+            'inventory_item_id', 'variety', 'grade', 'quantity_kg', 'price_per_kg', 'total_amount', 'batch_code',
+            'expected_supply_date', 'payment_method', 'payment_status', 'payment_reference', 'payment_date',
+            'notes', 'received_at', 'completed_at', 'pickup_date', 'confirmation_date', 'pickup_status',
+            'status', 'request_date', 'created_at', 'updated_at'
         ]
+
+    def get_trader_business_name(self, obj):
+        return getattr(obj.trader, 'company_name', None) or f"{obj.trader.full_name} Spices Trading"
 
     def get_trader_location(self, obj):
         if hasattr(obj.trader, 'location') and getattr(obj.trader, 'location'):
             return str(getattr(obj.trader, 'location'))
         return 'Kattappana, Idukki'
 
+    def get_exporter_company_name(self, obj):
+        if not obj.exporter:
+            return 'Approved Exporter'
+        return getattr(obj.exporter, 'company_name', None) or obj.exporter.full_name
+
+    def get_exporter_location(self, obj):
+        if not obj.exporter:
+            return 'Cochin Port / Idukki, Kerala'
+        return getattr(obj.exporter, 'location', None) or 'Cochin Port / Idukki, Kerala'
+
     def get_request_date(self, obj):
         if obj.created_at:
             return obj.created_at.strftime('%d-%m-%Y')
         return None
+
+    def get_payment_date(self, obj):
+        if obj.payment_status == 'PAID':
+            dt = obj.completed_at or obj.updated_at or obj.created_at
+            return dt.strftime('%d-%m-%Y %H:%M') if dt else 'Paid'
+        return None
+
+    def get_pickup_date(self, obj):
+        if obj.received_at:
+            return obj.received_at.strftime('%d-%m-%Y')
+        elif obj.status == 'COMPLETED' and obj.completed_at:
+            return obj.completed_at.strftime('%d-%m-%Y')
+        return None
+
+    def get_confirmation_date(self, obj):
+        if obj.completed_at:
+            return obj.completed_at.strftime('%d-%m-%Y %H:%M')
+        return None
+
+    def get_pickup_status(self, obj):
+        if obj.status == 'COMPLETED':
+            return 'Handover Confirmed & Completed'
+        elif obj.status in ['PICKUP_CONFIRMED', 'RECEIVED']:
+            return 'Pickup Confirmed'
+        elif obj.status in ['READY_FOR_PICKUP', 'READY_FOR_RECEIPT']:
+            return 'Ready for Pickup'
+        elif obj.status in ['PAID', 'PAYMENT_PENDING', 'ACCEPTED']:
+            return 'Awaiting Pickup Readiness'
+        elif obj.status in ['REJECTED', 'CANCELLED']:
+            return f"Closed ({obj.status})"
+        return 'Pending Exporter Review'
+
 
 
 

@@ -1,0 +1,176 @@
+@startuml 4.2.6_object_diagram
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 11
+
+object "farmer1 : User" as u_farmer {
+    id = 101
+    full_name = "Ramesh Kumar"
+    email = "ramesh.farmer@cardalink.in"
+    phone = "+91 94471 23456"
+    role = "FARMER"
+    status = "APPROVED"
+}
+
+object "plantation1 : Plantation" as p1 {
+    id = 201
+    name = "Highland Green Valley"
+    location = "Vandanmedu, Idukki, Kerala"
+    area_acres = 5.50
+    number_of_plants = 2200
+    variety = "Njallani Green Gold"
+    status = "ACTIVE"
+}
+
+object "harvest1 : HarvestRecord" as hr1 {
+    id = 301
+    harvest_date = 2026-09-15
+    fresh_quantity_kg = 250.00
+    dried_quantity_kg = 52.50
+    variety = "Njallani Green Gold"
+    grade = "8mm Bold"
+    unit = "kg"
+}
+
+object "listing1 : MarketplaceListing" as m1 {
+    id = 401
+    variety = "Njallani Green Gold"
+    available_quantity_kg = 50.00
+    price_per_kg = 2850.00
+    grade = "8mm Bold"
+    status = "SOLD"
+    available_date = 2026-09-18
+}
+
+object "trader1 : User" as u_trader {
+    id = 102
+    full_name = "Suresh V."
+    email = "suresh.traders@cardalink.in"
+    phone = "+91 98460 78901"
+    role = "TRADER"
+    status = "APPROVED"
+}
+
+object "request1 : PurchaseRequest" as pr1 {
+    id = 501
+    requested_quantity_kg = 50.00
+    price_per_kg = 2850.00
+    total_amount = 142500.00
+    payment_method = "ONLINE"
+    payment_status = "PAID"
+    pickup_status = "COMPLETED"
+    handover_confirmed_by_farmer = true
+    pickup_confirmed_by_trader = true
+    status = "COMPLETED"
+}
+
+object "traderInventory : InventoryItem" as inv_trader {
+    id = 601
+    batch_code = "BAT-2026-TR-884"
+    variety = "Njallani Green Gold"
+    quantity_kg = 50.00
+    grade = "AGEB 8mm"
+    purchase_price_per_kg = 2850.00
+    total_cost = 142500.00
+    status = "ALLOCATED"
+}
+
+object "exporter1 : User" as u_exporter {
+    id = 103
+    full_name = "George Thomas"
+    email = "george.exports@cardalink.in"
+    phone = "+91 97452 33445"
+    role = "EXPORTER"
+    status = "APPROVED"
+}
+
+object "buyer1 : InternationalBuyer" as b1 {
+    id = 701
+    name = "Tariq Al-Mansoor"
+    company_name = "Gulf Spices Trading LLC"
+    country = "United Arab Emirates"
+    email = "tariq@gulfspices.ae"
+    phone = "+971 50 123 4567"
+    address = "Warehouse 14, Al Quoz Industrial Area 3, Dubai"
+}
+
+object "order1 : ExportOrder" as ord1 {
+    id = 801
+    order_code = "EXP-ORD-B8363043"
+    buyer_name = "Tariq Al-Mansoor"
+    company_name = "Gulf Spices Trading LLC"
+    destination_country = "United Arab Emirates"
+    destination_port = "Dubai Port"
+    shipment_method = "SEA"
+    incoterms = "FOB"
+    cardamom_variety = "Njallani Green Gold"
+    grade = "AGEB 8mm"
+    quantity_kg = 50.00
+    price_per_kg = 69.86
+    total_value_usd = 3493.00
+    payment_method = "BANK_TRANSFER"
+    payment_status = "PAID"
+    status = "SHIPPED"
+}
+
+object "quality1 : QualityRecord" as qr1 {
+    id = 901
+    variety = "Njallani Green Gold"
+    grade = "AGEB 8mm"
+    moisture_percentage = 9.80
+    size_mm = "8mm Bold"
+    color_appearance = "Deep Green"
+    quality_status = "APPROVED"
+    inspection_date = 2026-09-22
+    inspector_name = "Dr. K. S. Nair (Spices Board Cert.)"
+}
+
+object "document1 : ExportDocument" as doc1 {
+    id = 951
+    document_type = "Phytosanitary Certificate"
+    document_name = "PSC_IN_2026_9841.pdf"
+    document_number = "PSC-2026-9841"
+    status = "VERIFIED"
+    issued_date = 2026-09-24
+}
+
+object "shipment1 : ShipmentRecord" as shp1 {
+    id = 1001
+    tracking_number = "MAEU-98214710"
+    carrier = "Maersk Sealand"
+    shipping_method = "SEA"
+    origin = "Cochin Port, India"
+    destination = "Dubai Port"
+    dispatch_date = 2026-09-26
+    estimated_delivery = 2026-10-04
+    status = "IN_TRANSIT"
+}
+
+object "txn1 : TransactionRecord" as txn1 {
+    id = 1101
+    transaction_code = "TXN-2026-9F8A2B1C"
+    amount = 142500.00
+    payment_method = "UPI / Razorpay"
+    status = "SUCCESS"
+}
+
+' Object Links
+u_farmer -- p1 : owns
+p1 -- hr1 : produced
+u_farmer -- hr1 : harvested
+u_farmer -- m1 : listed
+m1 -- pr1 : targeted by
+u_trader -- pr1 : requested
+u_farmer -- pr1 : fulfilled
+u_trader -- inv_trader : holds
+u_trader -- txn1 : sender
+u_farmer -- txn1 : receiver
+u_exporter -- b1 : manages
+u_exporter -- ord1 : created
+b1 -- ord1 : purchased
+inv_trader -- ord1 : supplied to
+ord1 -- qr1 : verified by
+ord1 -- doc1 : documented with
+ord1 -- shp1 : transported via
+@enduml

@@ -4,8 +4,9 @@ const API_BASE_URL = rawApiUrl.replace(/\/+$/, '');
 const request = async (endpoint, options = {}) => {
   const token = localStorage.getItem('cardalink_token');
   
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
@@ -187,26 +188,43 @@ export const createTraderInventoryApi = (data) => request('/trader/inventory', {
 export const fetchTraderSalesApi = () => request('/trader/sales');
 export const createTraderSaleApi = (data) => request('/trader/sales', { method: 'POST', body: JSON.stringify(data) });
 export const fetchTraderTransactionsApi = () => request('/trader/transactions');
-export const fetchTraderExportSuppliesApi = () => request('/trader/export-supply');
+const cleanQueryParams = (params = {}) => {
+  const clean = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '' && v !== 'ALL' && v !== 'undefined' && v !== 'null') {
+      clean[k] = v;
+    }
+  }
+  return clean;
+};
+
+export const fetchTraderExportSuppliesApi = (params = {}) => {
+  const query = new URLSearchParams(cleanQueryParams(params)).toString();
+  return request(`/trader/export-supply${query ? `?${query}` : ''}`);
+};
 export const createTraderExportSupplyApi = (data) => request('/trader/export-supply', { method: 'POST', body: JSON.stringify(data) });
+export const actionTraderExportSupplyApi = (requestId, action, payload = {}) => request(`/trader/export-supply/${requestId}/action`, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
 export const fetchTraderReportsApi = () => request('/trader/reports');
 
 // Farmer Response to Trader Bids
 export const fetchFarmerPurchaseRequestsApi = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
+  const query = new URLSearchParams(cleanQueryParams(params)).toString();
   return request(`/farmer/purchase-requests${query ? `?${query}` : ''}`);
 };
 export const respondFarmerPurchaseRequestApi = (requestId, action, payload = {}) => request(`/farmer/purchase-requests/${requestId}/action`, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
 export const fetchFarmerReportsApi = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
+  const query = new URLSearchParams(cleanQueryParams(params)).toString();
   return request(`/farmer/reports${query ? `?${query}` : ''}`);
 };
 
 // Exporter API Endpoints
-export const fetchTraderExportersApi = () => request('/trader/exporters');
+export const fetchTraderExportersApi = (params = {}) => {
+  const query = new URLSearchParams(cleanQueryParams(params)).toString();
+  return request(`/trader/exporters${query ? `?${query}` : ''}`);
+};
 export const fetchExporterDashboardStatsApi = () => request('/exporter/dashboard/stats');
 export const fetchExporterExportSuppliesApi = (params = {}) => {
-  const query = new URLSearchParams(params).toString();
+  const query = new URLSearchParams(cleanQueryParams(params)).toString();
   return request(`/exporter/export-supplies${query ? `?${query}` : ''}`);
 };
 export const fetchExporterExportSupplyDetailApi = (id) => request(`/exporter/export-supplies/${id}`);
@@ -235,6 +253,18 @@ export const fetchExporterReportsApi = (params = {}) => {
 };
 export const fetchExporterNotificationsApi = () => request('/exporter/notifications');
 export const updateExporterProfileApi = (data) => request('/exporter/profile', { method: 'PUT', body: JSON.stringify(data) });
+
+// Buyer Delivery Confirmation API Endpoints
+export const validateDeliveryTokenApi = (token) => request(`/buyer/delivery/validate/${encodeURIComponent(token)}`);
+export const confirmBuyerDeliveryApi = (formDataOrPayload) => {
+  const isFormData = typeof FormData !== 'undefined' && formDataOrPayload instanceof FormData;
+  return request('/buyer/delivery/confirm', {
+    method: 'POST',
+    body: isFormData ? formDataOrPayload : JSON.stringify(formDataOrPayload),
+  });
+};
+export const resendDeliveryConfirmationApi = (orderId) => request(`/exporter/orders/${orderId}/send-confirmation`, { method: 'POST' });
+export const fetchDeliveryConfirmationApi = (orderId) => request(`/exporter/orders/${orderId}/delivery-confirmation`);
 
 
 

@@ -16,7 +16,8 @@ from iam.models import (
     User, UserIdentity, AuditLog, CardamomVariety, Plantation, HarvestCycle, HarvestRecord,
     InventoryItem, AgrochemicalUsage, IrrigationRecord, ExpenseRecord,
     SaleRecord, TransactionRecord, ExportOrder, ExportDocument, ShipmentRecord, NotificationItem,
-    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord
+    MarketplaceListing, PurchaseRequest, ExportSupplyRequest, InternationalBuyer, QualityRecord, PackagingRecord,
+    BuyerDeliveryToken, BuyerDeliveryConfirmation
 )
 from iam.serializers import (
     UserSerializer, AuditLogSerializer, CardamomVarietySerializer, PlantationSerializer,
@@ -25,7 +26,19 @@ from iam.serializers import (
     TransactionRecordSerializer, ExportOrderSerializer, ExportDocumentSerializer,
     ShipmentRecordSerializer, NotificationItemSerializer,
     MarketplaceListingSerializer, PurchaseRequestSerializer, ExportSupplyRequestSerializer,
-    InternationalBuyerSerializer, QualityRecordSerializer, PackagingRecordSerializer
+    InternationalBuyerSerializer, QualityRecordSerializer, PackagingRecordSerializer,
+    ExporterDirectorySerializer, BuyerDeliveryConfirmationSerializer, BuyerDeliveryTokenSerializer
+)
+
+from iam.delivery_service import (
+    generate_delivery_token,
+    send_delivery_confirmation_email,
+    send_order_confirmation_email,
+    send_delivery_review_email,
+    validate_token_and_get_details,
+    confirm_buyer_order,
+    confirm_buyer_delivery,
+    is_rate_limited
 )
 
 from iam.config import get_permissions_for_role, PERMISSIONS
@@ -43,8 +56,14 @@ def send_response(status_code, message, data=None, success=True):
         payload['data'] = data
     return Response(payload, status=status_code)
 
-def send_error(status_code, message):
-    return Response({'success': False, 'message': message}, status=status_code)
+def send_error(status_code, message, data=None):
+    payload = {'success': False, 'message': message}
+    if data is not None:
+        if isinstance(data, dict):
+            payload.update(data)
+        else:
+            payload['data'] = data
+    return Response(payload, status=status_code)
 
 # 1. Registration Endpoint
 @api_view(['POST'])
@@ -2764,49 +2783,6 @@ def trader_transactions_list(request):
     return send_response(status.HTTP_200_OK, 'Transactions loaded', {'transactions': serializer.data})
 
 
-# 55. Trader Export Supply List & Create
-@api_view(['GET', 'POST'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
-def trader_export_supply_list_create(request):
-    auth_err = check_trader_auth(request)
-    if auth_err: return auth_err
-
-    user = request.user
-    if request.method == 'GET':
-        qs = ExportSupplyRequest.objects.filter(trader=user).order_by('-created_at')
-        serializer = ExportSupplyRequestSerializer(qs, many=True)
-        return send_response(status.HTTP_200_OK, 'Export supply requests loaded', {'export_supplies': serializer.data})
-
-    elif request.method == 'POST':
-        data = request.data
-        variety = data.get('variety') or 'Njallani Gold'
-        qty_raw = data.get('quantity_kg')
-        price_raw = data.get('price_per_kg', 0)
-        notes = data.get('notes', '')
-
-        try:
-            qty = parse_decimal_safe(qty_raw)
-            price = parse_decimal_safe(price_raw, default=Decimal('0.00'))
-            if qty is None or qty <= 0:
-                return send_error(status.HTTP_400_BAD_REQUEST, 'Supply quantity must be greater than 0')
-        except ValueError as e:
-            return send_error(status.HTTP_400_BAD_REQUEST, str(e))
-
-        exporter = User.objects.filter(role='EXPORTER').first()
-
-        supply = ExportSupplyRequest.objects.create(
-            trader=user,
-            exporter=exporter,
-            variety=variety,
-            quantity_kg=qty,
-            price_per_kg=price,
-            notes=notes,
-            status='PENDING'
-        )
-
-        serializer = ExportSupplyRequestSerializer(supply)
-        return send_response(status.HTTP_201_CREATED, 'Export supply offer submitted to exporters', {'export_supply': serializer.data})
 
 
 # 56. Trader Reports & Analytics
@@ -3133,8 +3109,19 @@ def trader_get_exporters(request):
     auth_err = check_trader_auth(request)
     if auth_err: return auth_err
 
-    exporters = User.objects.filter(role='EXPORTER', status='APPROVED')
-    serializer = UserSerializer(exporters, many=True)
+    # Only show active, approved Exporters
+    exporters = User.objects.filter(role='EXPORTER', status='APPROVED').order_by('full_name')
+
+    search = request.GET.get('search')
+    if search:
+        search = search.strip()
+        exporters = exporters.filter(
+            Q(full_name__icontains=search) |
+            Q(email__icontains=search) |
+            Q(phone__icontains=search)
+        )
+
+    serializer = ExporterDirectorySerializer(exporters, many=True)
     return send_response(status.HTTP_200_OK, 'Exporters loaded', {'exporters': serializer.data})
 
 @api_view(['GET', 'POST'])
@@ -3148,6 +3135,25 @@ def trader_export_supply_list_create(request):
 
     if request.method == 'GET':
         qs = ExportSupplyRequest.objects.filter(trader=user).order_by('-created_at')
+        status_filter = (request.GET.get('status') or '').strip().upper()
+        if status_filter and status_filter not in ['ALL', 'UNDEFINED', 'NULL', '']:
+            if status_filter in ['READY_FOR_PICKUP', 'READY_FOR_RECEIPT']:
+                qs = qs.filter(status__in=['READY_FOR_PICKUP', 'READY_FOR_RECEIPT'])
+            elif status_filter in ['PICKUP_CONFIRMED', 'RECEIVED']:
+                qs = qs.filter(status__in=['PICKUP_CONFIRMED', 'RECEIVED'])
+            elif status_filter in ['REJECTED', 'CANCELLED']:
+                qs = qs.filter(status__in=['REJECTED', 'CANCELLED'])
+            elif status_filter == 'PAID':
+                qs = qs.filter(Q(status='PAID') | Q(payment_status='PAID'))
+            elif status_filter == 'PAYMENT_PENDING':
+                qs = qs.filter(status='PAYMENT_PENDING')
+            else:
+                qs = qs.filter(status=status_filter)
+
+        exporter_id = request.GET.get('exporter_id')
+        if exporter_id and str(exporter_id).strip() not in ['undefined', 'null', '']:
+            qs = qs.filter(exporter_id=exporter_id)
+
         serializer = ExportSupplyRequestSerializer(qs, many=True)
         return send_response(status.HTTP_200_OK, 'Export supply requests loaded', {'export_supplies': serializer.data})
 
@@ -3160,6 +3166,9 @@ def trader_export_supply_list_create(request):
         quantity_raw = data.get('quantity_kg')
         price_raw = data.get('price_per_kg')
         expected_supply_date = data.get('expected_supply_date')
+        payment_method = (data.get('payment_method') or 'ONLINE').strip().upper()
+        if payment_method not in ['ONLINE', 'DIRECT']:
+            payment_method = 'ONLINE'
         notes = (data.get('notes') or '').strip()
 
         if not exporter_id:
@@ -3167,29 +3176,26 @@ def trader_export_supply_list_create(request):
         try:
             exporter = User.objects.get(id=exporter_id, role='EXPORTER', status='APPROVED')
         except User.DoesNotExist:
-            return send_error(status.HTTP_404_NOT_FOUND, 'Selected Exporter not found')
+            return send_error(status.HTTP_404_NOT_FOUND, 'Selected Exporter not found or is not approved')
 
-        inventory_item = None
-        if inventory_id:
-            try:
-                inventory_item = InventoryItem.objects.get(id=inventory_id, owner=user)
-            except InventoryItem.DoesNotExist:
-                return send_error(status.HTTP_404_NOT_FOUND, 'Selected inventory item not found')
+        if not inventory_id:
+            return send_error(status.HTTP_400_BAD_REQUEST, 'Please select an item from your Trader Inventory')
+
+        try:
+            inventory_item = InventoryItem.objects.get(id=inventory_id, owner=user)
+        except InventoryItem.DoesNotExist:
+            return send_error(status.HTTP_404_NOT_FOUND, 'Selected inventory item not found in your Trader inventory')
 
         if not variety:
-            if inventory_item:
-                variety = inventory_item.variety
-            else:
-                return send_error(status.HTTP_400_BAD_REQUEST, 'Cardamom variety is required')
-
-        if inventory_item and not grade:
+            variety = inventory_item.variety
+        if not grade:
             grade = inventory_item.grade
 
         try:
             qty = parse_decimal_safe(quantity_raw)
             if qty is None or qty <= 0:
-                return send_error(status.HTTP_400_BAD_REQUEST, 'Quantity must be greater than 0')
-            if inventory_item and qty > inventory_item.quantity_kg:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Quantity must be greater than 0 KG')
+            if qty > inventory_item.quantity_kg:
                 return send_error(status.HTTP_400_BAD_REQUEST, f'Quantity cannot exceed available Trader inventory ({inventory_item.quantity_kg} KG)')
         except ValueError as e:
             return send_error(status.HTTP_400_BAD_REQUEST, str(e))
@@ -3197,7 +3203,7 @@ def trader_export_supply_list_create(request):
         try:
             price = parse_decimal_safe(price_raw)
             if price is None or price <= 0:
-                return send_error(status.HTTP_400_BAD_REQUEST, 'Price per KG must be greater than 0')
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Price per KG must be greater than ₹0')
         except ValueError as e:
             return send_error(status.HTTP_400_BAD_REQUEST, str(e))
 
@@ -3209,7 +3215,6 @@ def trader_export_supply_list_create(request):
                 pass
 
         total_amount = (qty * price).quantize(Decimal('0.01'))
-
         batch_code = inventory_item.batch_code if inventory_item else f"TR-EXP-{user.id}-{int(datetime.now().timestamp())}"
 
         export_request = ExportSupplyRequest.objects.create(
@@ -3223,6 +3228,8 @@ def trader_export_supply_list_create(request):
             total_amount=total_amount,
             batch_code=batch_code,
             expected_supply_date=parsed_date,
+            payment_method=payment_method,
+            payment_status='PENDING',
             notes=notes,
             status='PENDING'
         )
@@ -3231,12 +3238,74 @@ def trader_export_supply_list_create(request):
         NotificationItem.objects.create(
             recipient=exporter,
             title='New Export Supply Request',
-            message=f"Trader {user.full_name} sent an export supply request #{export_request.id} for {qty} KG of {variety}.",
+            message=f"Trader {user.full_name} sent an export supply request #{export_request.id} for {qty} KG of {variety} ({grade}) at ₹{price}/KG (Total: ₹{total_amount}).",
             category='EXPORT_SUPPLY'
         )
 
         serializer = ExportSupplyRequestSerializer(export_request)
         return send_response(status.HTTP_201_CREATED, 'Export supply request sent successfully', {'export_supply': serializer.data})
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def trader_export_supply_action(request, request_id):
+    auth_err = check_trader_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        req = ExportSupplyRequest.objects.get(id=request_id, trader=user)
+    except ExportSupplyRequest.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export supply request not found')
+
+    action = (request.data.get('action') or '').strip().upper()
+    if not action:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Action parameter is required')
+
+    with transaction.atomic():
+        if action == 'CANCEL':
+            if req.status not in ['PENDING']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot cancel request in status {req.status}')
+            req.status = 'CANCELLED'
+            req.save()
+            if req.exporter:
+                NotificationItem.objects.create(
+                    recipient=req.exporter,
+                    title='Export Supply Offer Cancelled',
+                    message=f"Trader {user.full_name} cancelled supply request #{req.id}.",
+                    category='EXPORT_SUPPLY'
+                )
+        elif action in ['READY_FOR_PICKUP', 'MARK_READY']:
+            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING', 'PAID']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot mark ready for pickup in status {req.status}')
+            req.status = 'READY_FOR_PICKUP'
+            req.save()
+            if req.exporter:
+                NotificationItem.objects.create(
+                    recipient=req.exporter,
+                    title='Stock Ready for Pickup',
+                    message=f"Trader {user.full_name} marked supply #{req.id} ready for physical pickup.",
+                    category='EXPORT_SUPPLY'
+                )
+        elif action in ['CONFIRM_PICKUP', 'PICKUP_CONFIRMED']:
+            if req.status not in ['READY_FOR_PICKUP', 'READY_FOR_RECEIPT', 'PAID']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot confirm pickup in status {req.status}')
+            req.status = 'PICKUP_CONFIRMED'
+            req.received_at = timezone.now()
+            req.save()
+            if req.exporter:
+                NotificationItem.objects.create(
+                    recipient=req.exporter,
+                    title='Pickup Confirmed by Trader',
+                    message=f"Trader {user.full_name} confirmed pickup handover for supply #{req.id}.",
+                    category='EXPORT_SUPPLY'
+                )
+        else:
+            return send_error(status.HTTP_400_BAD_REQUEST, f'Unknown trader action: {action}')
+
+    serializer = ExportSupplyRequestSerializer(req)
+    return send_response(status.HTTP_200_OK, f'Export supply status updated to {req.status}', {'export_supply': serializer.data})
+
 
 # Exporter Dashboard Stats
 @api_view(['GET'])
@@ -3290,9 +3359,20 @@ def exporter_export_supplies_list(request):
     user = request.user
     qs = ExportSupplyRequest.objects.filter(Q(exporter=user) | Q(exporter__isnull=True)).order_by('-created_at')
 
-    status_filter = request.GET.get('status')
-    if status_filter:
-        qs = qs.filter(status=status_filter.upper())
+    status_filter = (request.GET.get('status') or '').strip().upper()
+    if status_filter and status_filter not in ['ALL', 'UNDEFINED', 'NULL', '']:
+        if status_filter in ['READY_FOR_PICKUP', 'READY_FOR_RECEIPT']:
+            qs = qs.filter(status__in=['READY_FOR_PICKUP', 'READY_FOR_RECEIPT'])
+        elif status_filter in ['PICKUP_CONFIRMED', 'RECEIVED']:
+            qs = qs.filter(status__in=['PICKUP_CONFIRMED', 'RECEIVED'])
+        elif status_filter in ['REJECTED', 'CANCELLED']:
+            qs = qs.filter(status__in=['REJECTED', 'CANCELLED'])
+        elif status_filter == 'PAID':
+            qs = qs.filter(Q(status='PAID') | Q(payment_status='PAID'))
+        elif status_filter == 'PAYMENT_PENDING':
+            qs = qs.filter(status='PAYMENT_PENDING')
+        else:
+            qs = qs.filter(status=status_filter)
 
     search = request.GET.get('search')
     if search:
@@ -3344,6 +3424,7 @@ def exporter_export_supply_action(request, request_id):
         return send_error(status.HTTP_400_BAD_REQUEST, 'Action parameter is required')
 
     with transaction.atomic():
+        req = ExportSupplyRequest.objects.select_for_update().get(id=request_id)
         if action == 'ACCEPT':
             if req.status not in ['PENDING']:
                 return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot ACCEPT request in status {req.status}')
@@ -3389,7 +3470,7 @@ def exporter_export_supply_action(request, request_id):
                 ref = payment_reference or f"EXP-PAY-{secrets.token_hex(6).upper()}"
                 req.payment_status = 'PAID'
                 req.payment_reference = ref
-                req.status = 'READY_FOR_RECEIPT'
+                req.status = 'PAID'
             else:
                 req.payment_status = 'PENDING'
                 req.payment_reference = payment_reference or 'DIRECT_PAYMENT_PENDING'
@@ -3409,7 +3490,7 @@ def exporter_export_supply_action(request, request_id):
                 return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot confirm payment for request in status {req.status}')
 
             req.payment_status = 'PAID'
-            req.status = 'READY_FOR_RECEIPT'
+            req.status = 'PAID'
             if not req.payment_reference or req.payment_reference == 'DIRECT_PAYMENT_PENDING':
                 req.payment_reference = f"DIRECT-CONFIRMED-{secrets.token_hex(4).upper()}"
             req.save()
@@ -3421,61 +3502,80 @@ def exporter_export_supply_action(request, request_id):
                 category='EXPORT_SUPPLY'
             )
 
-        elif action in ['RECEIVE', 'MARK_RECEIVED', 'COMPLETE']:
+        elif action in ['READY_FOR_PICKUP', 'MARK_READY_FOR_PICKUP']:
+            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING', 'PAID']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot mark ready for pickup in status {req.status}')
+            req.status = 'READY_FOR_PICKUP'
+            req.save()
+
+            NotificationItem.objects.create(
+                recipient=req.trader,
+                title='Stock Ready for Pickup',
+                message=f"Exporter {user.full_name} marked supply #{req.id} ready for physical pickup.",
+                category='EXPORT_SUPPLY'
+            )
+
+        elif action in ['CONFIRM_PICKUP', 'PICKUP_CONFIRMED', 'RECEIVE', 'MARK_RECEIVED', 'COMPLETE']:
             if req.status in ['COMPLETED', 'RECEIVED']:
                 return send_error(status.HTTP_400_BAD_REQUEST, 'Stock has already been received/completed')
 
-            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING', 'PAID', 'READY_FOR_RECEIPT']:
-                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot receive stock in status {req.status}')
+            if req.status not in ['ACCEPTED', 'PAYMENT_PENDING', 'PAID', 'READY_FOR_PICKUP', 'READY_FOR_RECEIPT', 'PICKUP_CONFIRMED', 'RECEIVED']:
+                return send_error(status.HTTP_400_BAD_REQUEST, f'Cannot confirm pickup in status {req.status}')
 
             # Deduct inventory from Trader if source inventory exists
             if req.inventory_item:
-                trader_inv = req.inventory_item
-                if trader_inv.quantity_kg < req.quantity_kg:
-                    return send_error(status.HTTP_400_BAD_REQUEST, f'Trader inventory insufficient. Available: {trader_inv.quantity_kg} KG')
+                trader_inv = InventoryItem.objects.select_for_update().filter(id=req.inventory_item.id).first()
+                if trader_inv:
+                    if trader_inv.quantity_kg < req.quantity_kg:
+                        return send_error(status.HTTP_400_BAD_REQUEST, f'Trader inventory insufficient. Available: {trader_inv.quantity_kg} KG')
 
-                trader_inv.quantity_kg -= req.quantity_kg
-                if trader_inv.quantity_kg <= 0:
-                    trader_inv.status = 'SOLD_OUT'
-                trader_inv.save()
+                    trader_inv.quantity_kg -= req.quantity_kg
+                    if trader_inv.quantity_kg <= 0:
+                        trader_inv.status = 'SOLD_OUT'
+                    trader_inv.save()
 
-            # Create Exporter Inventory Item
-            exp_batch = f"EXP-INV-{req.id}-{int(datetime.now().timestamp())}"
-            InventoryItem.objects.create(
-                owner=user,
-                source_trader=req.trader,
-                variety=req.variety,
-                grade=req.grade,
-                quantity_kg=req.quantity_kg,
-                unit='KG',
-                purchase_price_per_kg=req.price_per_kg,
-                total_cost=req.total_amount,
-                status='AVAILABLE',
-                batch_code=exp_batch
-            )
+            # Create Exporter Inventory Item (prevent duplicate inventory updates)
+            if not InventoryItem.objects.filter(owner=user, source_trader=req.trader, batch_code__startswith=f"EXP-INV-{req.id}-").exists():
+                exp_batch = f"EXP-INV-{req.id}-{int(timezone.now().timestamp())}"
+                InventoryItem.objects.create(
+                    owner=user,
+                    source_trader=req.trader,
+                    variety=req.variety,
+                    grade=req.grade,
+                    quantity_kg=req.quantity_kg,
+                    unit='KG',
+                    purchase_price_per_kg=req.price_per_kg,
+                    total_cost=req.total_amount,
+                    status='AVAILABLE',
+                    batch_code=exp_batch
+                )
 
-            # Record Transaction
-            tx_code = f"TX-EXP-{req.id}-{secrets.token_hex(4).upper()}"
-            TransactionRecord.objects.create(
-                transaction_code=tx_code,
-                sender=user,
-                receiver=req.trader,
-                amount=req.total_amount,
-                payment_method=req.payment_method,
-                status='SUCCESS'
-            )
+            # Record Transaction only if payment was already PAID and no transaction record exists yet
+            if req.payment_status == 'PAID':
+                tx_prefix = f"TX-EXP-{req.id}-"
+                if not TransactionRecord.objects.filter(sender=user, receiver=req.trader, transaction_code__startswith=tx_prefix).exists():
+                    tx_code = f"TX-EXP-{req.id}-{secrets.token_hex(4).upper()}"
+                    TransactionRecord.objects.create(
+                        transaction_code=tx_code,
+                        sender=user,
+                        receiver=req.trader,
+                        amount=req.total_amount,
+                        payment_method=req.payment_method,
+                        status='SUCCESS'
+                    )
 
             now = timezone.now()
-            req.received_at = now
+            if not req.received_at:
+                req.received_at = now
             req.completed_at = now
             req.status = 'COMPLETED'
-            req.payment_status = 'PAID'
+            # Preserve current payment workflow: do NOT automatically mark pending payment as paid
             req.save()
 
             NotificationItem.objects.create(
                 recipient=req.trader,
                 title='Export Supply Completed',
-                message=f"Exporter {user.full_name} received stock and completed export supply #{req.id}.",
+                message=f"Exporter {user.full_name} confirmed pickup, received stock, and completed export supply #{req.id}.",
                 category='EXPORT_SUPPLY'
             )
 
@@ -3736,8 +3836,22 @@ def exporter_orders_list_create(request):
                 status='CONFIRMED'
             )
 
+        email_result = None
+        if email or (buyer and getattr(buyer, 'email', None)):
+            try:
+                raw_token, token_obj = generate_delivery_token(order, token_type='ORDER_CONFIRM')
+                email_result = send_order_confirmation_email(order, raw_token)
+            except Exception as e:
+                logger.warning(f"Initial order confirmation email error: {e}")
+
         serializer = ExportOrderSerializer(order)
-        return send_response(status.HTTP_201_CREATED, 'Export order created successfully', {'order': serializer.data})
+        res_data = {'order': serializer.data}
+        if email_result:
+            res_data['email_result'] = email_result
+        msg = 'Export order created successfully'
+        if email_result and email_result.get('success'):
+            msg += ' and confirmation email dispatched to buyer.'
+        return send_response(status.HTTP_201_CREATED, msg, res_data)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -3870,12 +3984,34 @@ def exporter_order_packaging_create(request, order_id):
 
     data = request.data
     p_type = (data.get('packaging_type') or 'Vacuum Pack').strip()
-    num_packages = int(data.get('number_of_packages', 1))
-    weight_per_pkg = Decimal(str(data.get('weight_per_package_kg', 10)))
-    total_pkg_qty = (num_packages * weight_per_pkg).quantize(Decimal('0.01'))
+    
+    try:
+        raw_num = data.get('number_of_packages')
+        num_packages = int(raw_num) if raw_num is not None and str(raw_num).strip() != '' else 1
+    except (ValueError, TypeError):
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Number of packages must be a valid whole number (e.g. 1, 2, 5)')
 
-    if total_pkg_qty > order.quantity_kg:
-        return send_error(status.HTTP_400_BAD_REQUEST, f'Packaging total quantity ({total_pkg_qty} KG) exceeds order quantity ({order.quantity_kg} KG)')
+    try:
+        raw_wt = data.get('weight_per_package_kg')
+        weight_per_pkg = Decimal(str(raw_wt).strip()) if raw_wt is not None and str(raw_wt).strip() != '' else Decimal('1.00')
+    except Exception:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Weight per package must be a valid number in KG')
+
+    if num_packages <= 0:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Number of packages must be at least 1')
+
+    if weight_per_pkg <= Decimal('0'):
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Weight per package must be greater than 0 KG')
+
+    total_pkg_qty = (Decimal(str(num_packages)) * weight_per_pkg).quantize(Decimal('0.01'))
+
+    # Allow a small 0.05 KG tolerance margin for decimal rounding
+    max_allowed = Decimal(str(order.quantity_kg)) + Decimal('0.05')
+    if total_pkg_qty > max_allowed:
+        return send_error(
+            status.HTTP_400_BAD_REQUEST,
+            f'Packaging total quantity ({total_pkg_qty} KG) exceeds order quantity ({order.quantity_kg} KG). Please adjust the number of packages or package weight.'
+        )
 
     pr = PackagingRecord.objects.create(
         export_order=order,
@@ -3884,15 +4020,18 @@ def exporter_order_packaging_create(request, order_id):
         weight_per_package_kg=weight_per_pkg,
         total_quantity_kg=total_pkg_qty,
         packaging_date=date.today(),
-        batch_number=order.batch_code,
+        batch_number=order.batch_code or f"BATCH-{order.order_code}",
         notes=data.get('notes', '')
     )
 
-    order.status = 'PACKAGING'
-    order.save()
+    # Only update status if order has not yet progressed past packaging
+    advanced_statuses = ['PACKAGING', 'DOCUMENTS_PENDING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT', 'ARRIVED', 'AWAITING_BUYER_CONFIRMATION', 'DELIVERED', 'COMPLETED']
+    if order.status not in advanced_statuses:
+        order.status = 'PACKAGING'
+        order.save()
 
     serializer = PackagingRecordSerializer(pr)
-    return send_response(status.HTTP_201_CREATED, 'Packaging record saved', {'packaging_record': serializer.data})
+    return send_response(status.HTTP_201_CREATED, 'Packaging record saved successfully', {'packaging_record': serializer.data})
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
@@ -4007,7 +4146,7 @@ def exporter_shipment_status_update(request, shipment_id):
         return send_error(status.HTTP_404_NOT_FOUND, 'Shipment not found')
 
     new_status = (request.data.get('status') or '').strip().upper()
-    valid_statuses = ['PREPARING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED']
+    valid_statuses = ['PREPARING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'IN_TRANSIT', 'ARRIVED', 'AWAITING_BUYER_CONFIRMATION', 'DELIVERED', 'DELIVERY_DISPUTE']
 
     if new_status not in valid_statuses:
         return send_error(status.HTTP_400_BAD_REQUEST, f'Invalid status: {new_status}')
@@ -4016,14 +4155,30 @@ def exporter_shipment_status_update(request, shipment_id):
     shipment.save()
 
     order = shipment.export_order
-    if new_status == 'DELIVERED':
-        order.status = 'COMPLETED'
-    elif new_status in ['SHIPPED', 'IN_TRANSIT', 'ARRIVED']:
+    email_result = None
+    if new_status in ['SHIPPED', 'IN_TRANSIT']:
+        # If no active unconsumed token exists and order not yet confirmed, generate token and dispatch email
+        if not hasattr(order, 'delivery_confirmation') and not order.delivery_tokens.filter(is_used=False, is_revoked=False).exists():
+            raw_token, token_obj = generate_delivery_token(order)
+            email_result = send_delivery_confirmation_email(order, raw_token)
+            order.status = 'AWAITING_BUYER_CONFIRMATION'
+        else:
+            order.status = new_status
+    elif new_status == 'DELIVERED':
+        order.status = 'DELIVERED'
+        # Automatically generate delivery review token and send Delivery Review Email to buyer
+        if not hasattr(order, 'delivery_confirmation'):
+            raw_token, token_obj = generate_delivery_token(order, token_type='DELIVERY_REVIEW')
+            email_result = send_delivery_review_email(order, raw_token)
+    else:
         order.status = new_status
     order.save()
 
     serializer = ShipmentRecordSerializer(shipment)
-    return send_response(status.HTTP_200_OK, f'Shipment status updated to {new_status}', {'shipment': serializer.data})
+    response_data = {'shipment': serializer.data}
+    if email_result:
+        response_data['email_result'] = email_result
+    return send_response(status.HTTP_200_OK, f'Shipment status updated to {new_status}', response_data)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -4162,6 +4317,169 @@ def exporter_update_profile(request):
 
     serializer = UserSerializer(user)
     return send_response(status.HTTP_200_OK, 'Profile updated successfully', {'user': serializer.data})
+
+
+# =============================================================================
+# BUYER DELIVERY CONFIRMATION WORKFLOW (SECURE TOKEN-BASED)
+# =============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def buyer_delivery_token_validate(request, token=None):
+    """
+    Public endpoint for International Buyers to validate their confirmation link.
+    Strictly rate limited to prevent brute-force token enumeration.
+    Does not expose sensitive credentials, IAM tokens, or internal pricing.
+    """
+    client_ip = get_client_ip(request)
+    if is_rate_limited(client_ip, action='validate'):
+        return send_error(status.HTTP_429_TOO_MANY_REQUESTS, 'Too many requests. Please wait a moment before trying again.')
+
+    raw_token = token or request.GET.get('token')
+    if not raw_token:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Confirmation token is required.')
+
+    result = validate_token_and_get_details(raw_token)
+    if not result['valid']:
+        status_code = status.HTTP_404_NOT_FOUND if result.get('code') == 'INVALID_TOKEN' else status.HTTP_400_BAD_REQUEST
+        payload = {'code': result.get('code')}
+        if result.get('reference'):
+            payload['reference'] = result.get('reference')
+        if result.get('confirmed_at'):
+            payload['confirmed_at'] = result.get('confirmed_at')
+        return send_error(status_code, result['message'], data=payload)
+
+    return send_response(status.HTTP_200_OK, 'Delivery confirmation details loaded', {'order': result['order_details']})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def buyer_delivery_confirm(request):
+    """
+    Public endpoint for International Buyers:
+    Stage 1: If action is CONFIRM_ORDER or token_type is ORDER_CONFIRM, confirms buyer purchase order.
+    Stage 2: If action is CONFIRM_DELIVERY or token_type is DELIVERY_REVIEW, confirms delivery receipt and condition.
+    """
+    client_ip = get_client_ip(request)
+    if is_rate_limited(client_ip, action='confirm'):
+        return send_error(status.HTTP_429_TOO_MANY_REQUESTS, 'Too many confirmation attempts. Please wait a moment.')
+
+    raw_token = request.data.get('token') or request.META.get('HTTP_X_CONFIRMATION_TOKEN') or request.GET.get('token')
+    action = (request.data.get('action') or '').strip().upper()
+    stage = (request.data.get('stage') or '').strip().upper()
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+    from iam.delivery_service import hash_token
+    token_obj = None
+    if raw_token:
+        try:
+            token_obj = BuyerDeliveryToken.objects.select_related('export_order').get(token_hash=hash_token(raw_token))
+        except BuyerDeliveryToken.DoesNotExist:
+            token_obj = None
+
+    is_order_confirm = (
+        action == 'CONFIRM_ORDER'
+        or stage == 'ORDER_CONFIRM'
+        or (token_obj and token_obj.token_type == 'ORDER_CONFIRM' and token_obj.export_order.status not in ['DELIVERED', 'ARRIVED', 'DELIVERY_DISPUTE'])
+    )
+
+    if is_order_confirm:
+        qty_confirmed = request.data.get('quantity_received_kg') or request.data.get('quantity_confirmed_kg')
+        result = confirm_buyer_order(
+            raw_token=raw_token,
+            quantity_confirmed_kg=qty_confirmed,
+            client_ip=client_ip,
+            user_agent=user_agent
+        )
+    else:
+        qty_received = request.data.get('quantity_received_kg')
+        delivery_condition = request.data.get('delivery_condition') or 'GOOD'
+        comments = request.data.get('comments') or ''
+        evidence_file = request.FILES.get('evidence_file')
+
+        result = confirm_buyer_delivery(
+            raw_token=raw_token,
+            quantity_received_kg=qty_received,
+            delivery_condition=delivery_condition,
+            comments=comments,
+            evidence_file=evidence_file,
+            client_ip=client_ip,
+            user_agent=user_agent
+        )
+
+    if not result['success']:
+        status_code = status.HTTP_404_NOT_FOUND if result.get('code') == 'INVALID_TOKEN' else status.HTTP_400_BAD_REQUEST
+        return send_error(status_code, result['message'], data={'code': result.get('code')})
+
+    return send_response(status.HTTP_201_CREATED, result['message'], {'confirmation': result['confirmation']})
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_resend_delivery_confirmation(request, order_id):
+    """
+    Allows the authenticated Exporter to generate and resend a secure confirmation link.
+    If order is DELIVERED, generates and dispatches the Delivery Review link.
+    If order is before delivery, generates and dispatches the Order Confirmation link.
+    """
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    if hasattr(order, 'delivery_confirmation'):
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Receipt for this order has already been confirmed by the buyer.')
+
+    if order.status in ['DELIVERED', 'ARRIVED']:
+        token_type = 'DELIVERY_REVIEW'
+        raw_token, token_obj = generate_delivery_token(order, token_type=token_type)
+        email_result = send_delivery_review_email(order, raw_token)
+    else:
+        token_type = 'ORDER_CONFIRM'
+        raw_token, token_obj = generate_delivery_token(order, token_type=token_type)
+        email_result = send_order_confirmation_email(order, raw_token)
+
+    return send_response(
+        status.HTTP_200_OK,
+        email_result.get('message', 'Confirmation link generated'),
+        {
+            'order_id': order.id,
+            'order_code': order.order_code,
+            'token_type': token_type,
+            'email_sent': email_result.get('success', False),
+            'confirmation_link': email_result.get('link'),
+            'expires_at': token_obj.expires_at.isoformat()
+        }
+    )
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
+def exporter_order_delivery_confirmation_detail(request, order_id):
+    """
+    Allows the authenticated Exporter to view saved delivery confirmation details,
+    dispute information, and proof-of-delivery evidence.
+    """
+    auth_err = check_exporter_auth(request)
+    if auth_err: return auth_err
+
+    user = request.user
+    try:
+        order = ExportOrder.objects.get(id=order_id, exporter=user)
+    except ExportOrder.DoesNotExist:
+        return send_error(status.HTTP_404_NOT_FOUND, 'Export order not found')
+
+    if not hasattr(order, 'delivery_confirmation'):
+        return send_error(status.HTTP_404_NOT_FOUND, 'Delivery confirmation has not been submitted yet for this order.')
+
+    serializer = BuyerDeliveryConfirmationSerializer(order.delivery_confirmation)
+    return send_response(status.HTTP_200_OK, 'Delivery confirmation loaded', {'confirmation': serializer.data})
 
 
 
