@@ -4,6 +4,7 @@ import secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
+import requests
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
@@ -22,6 +23,122 @@ logger = logging.getLogger(__name__)
 # Allowed file extensions for delivery evidence
 ALLOWED_EVIDENCE_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp'}
 MAX_EVIDENCE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def dispatch_cardalink_email(subject: str, plain_message: str, html_message: str, recipient_email: str) -> dict:
+    """
+    Intelligent multi-tier email dispatcher:
+    1. HTTP Tier (Port 443 HTTPS - Works 100% on Render/Cloud without SMTP port restrictions):
+       - If RESEND_API_KEY is configured: sends via https://api.resend.com/emails
+       - If BREVO_API_KEY is configured: sends via https://api.brevo.com/v3/smtp/email
+    2. Django SMTP Tier (Port 587/465):
+       - If EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are set, sends via smtplib with timeout.
+       - If connection is blocked (e.g. Render Free tier blocking outbound 587/465), catches error and explains.
+    3. Console Mode Detection:
+       - If running with console.EmailBackend, notes that credentials are not configured in live environment.
+    """
+    # 1. Check HTTP Providers (Port 443)
+    resend_key = getattr(settings, 'RESEND_API_KEY', '').strip()
+    if resend_key:
+        try:
+            from_addr = "CardaLink Exports <onboarding@resend.dev>"
+            custom_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '')
+            if custom_from and 'resend.dev' not in custom_from and '@' in custom_from and 'no-reply@cardalink.com' not in custom_from:
+                from_addr = custom_from
+
+            res = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "from": from_addr,
+                    "to": [recipient_email],
+                    "subject": subject,
+                    "html": html_message,
+                    "text": plain_message
+                },
+                timeout=10
+            )
+            if res.status_code in [200, 201]:
+                return {"success": True, "message": f"Confirmation email sent to {recipient_email} via Resend."}
+            else:
+                logger.warning(f"Resend API error ({res.status_code}): {res.text}")
+        except Exception as e:
+            logger.warning(f"Resend dispatch failed: {e}")
+
+    brevo_key = getattr(settings, 'BREVO_API_KEY', '').strip()
+    if brevo_key:
+        try:
+            res = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "api-key": brevo_key,
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "sender": {"name": "CardaLink Exports", "email": getattr(settings, 'EMAIL_HOST_USER', '') or "exports@cardalink.com"},
+                    "to": [{"email": recipient_email}],
+                    "subject": subject,
+                    "htmlContent": html_message,
+                    "textContent": plain_message
+                },
+                timeout=10
+            )
+            if res.status_code in [200, 201]:
+                return {"success": True, "message": f"Confirmation email sent to {recipient_email} via Brevo."}
+            else:
+                logger.warning(f"Brevo API error ({res.status_code}): {res.text}")
+        except Exception as e:
+            logger.warning(f"Brevo dispatch failed: {e}")
+
+    # 2. Check SMTP Credentials
+    email_user = getattr(settings, 'EMAIL_HOST_USER', '').strip()
+    email_pwd = getattr(settings, 'EMAIL_HOST_PASSWORD', '').strip()
+    backend_name = getattr(settings, 'EMAIL_BACKEND', '')
+
+    if not (email_user and email_pwd) or 'console' in backend_name.lower():
+        logger.warning(f"Email credentials missing in environment variables. Email was logged to console simulation, not delivered to {recipient_email}.")
+        return {
+            "success": False,
+            "error": "SMTP_NOT_CONFIGURED",
+            "message": "Email credentials (EMAIL_HOST_USER, EMAIL_HOST_PASSWORD) are not set in the live environment variables. Please add them in the Render Dashboard."
+        }
+
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or f"CardaLink Exports <{email_user}>"
+
+    try:
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=from_email,
+            recipient_list=[recipient_email],
+            html_message=html_message,
+            fail_silently=False
+        )
+        return {
+            "success": True,
+            "message": f"Confirmation email sent to {recipient_email}"
+        }
+    except Exception as e:
+        err_msg = str(e)
+        logger.warning(f"SMTP dispatch to {recipient_email} failed: {err_msg}")
+        if any(kw in err_msg.lower() for kw in ['timeout', 'connection timed out', 'connection refused', 'network is unreachable', '111', '110']):
+            friendly = "SMTP connection failed: Outbound ports 587/465 appear blocked or restricted by the cloud host. Render blocks standard SMTP on free instances. Add a RESEND_API_KEY in Render Environment Variables for guaranteed delivery over HTTPS."
+        elif '535' in err_msg:
+            friendly = "Google SMTP authentication failed: Invalid App Password. Please generate a 16-character App Password at https://myaccount.google.com/apppasswords."
+        elif '553' in err_msg or '5.7.1' in err_msg:
+            friendly = f"Google SMTP rejected sender address: DEFAULT_FROM_EMAIL must match your Gmail address ({email_user})."
+        else:
+            friendly = f"Could not send email to {recipient_email} via SMTP: {err_msg}"
+
+        return {
+            "success": False,
+            "error": err_msg,
+            "message": friendly
+        }
+
 
 
 def hash_token(raw_token: str) -> str:
@@ -172,28 +289,15 @@ CardaLink Global Spice Export Network
 </html>
 """
 
-    try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'CardaLink Exports <no-reply@cardalink.com>'),
-            recipient_list=[recipient_email],
-            html_message=html_message,
-            fail_silently=False
-        )
-        return {
-            "success": True,
-            "message": f"Order confirmation email sent to {recipient_email}",
-            "link": confirmation_link
-        }
-    except Exception as e:
-        logger.warning(f"Order confirmation email failed for {export_order.order_code}: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "message": f"Could not send email to {recipient_email}. Please check SMTP settings.",
-            "link": confirmation_link
-        }
+    res = dispatch_cardalink_email(
+        subject=subject,
+        plain_message=plain_message,
+        html_message=html_message,
+        recipient_email=recipient_email
+    )
+    res["link"] = confirmation_link
+    return res
+
 
 
 def send_delivery_review_email(export_order: ExportOrder, raw_token: str):
@@ -308,28 +412,15 @@ CardaLink Global Spice Export Network
 </html>
 """
 
-    try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'CardaLink Exports <no-reply@cardalink.com>'),
-            recipient_list=[recipient_email],
-            html_message=html_message,
-            fail_silently=False
-        )
-        return {
-            "success": True,
-            "message": f"Delivery review email sent to {recipient_email}",
-            "link": confirmation_link
-        }
-    except Exception as e:
-        logger.warning(f"Delivery review email failed for {export_order.order_code}: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "message": f"Could not send email to {recipient_email}. Please check SMTP settings.",
-            "link": confirmation_link
-        }
+    res = dispatch_cardalink_email(
+        subject=subject,
+        plain_message=plain_message,
+        html_message=html_message,
+        recipient_email=recipient_email
+    )
+    res["link"] = confirmation_link
+    return res
+
 
 
 def send_delivery_confirmation_email(export_order: ExportOrder, raw_token: str, token_type: str = None):

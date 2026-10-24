@@ -6,7 +6,7 @@ import {
   Clock, AlertCircle, Plus, Search, Filter, Eye, X, CheckCircle, ShieldCheck,
   Building2, User, Users, CreditCard, BarChart3, ChevronRight, Layers, Award,
   Sparkles, RefreshCw, Anchor, Compass, DollarSign, Calendar, Mail, Send,
-  ExternalLink, AlertTriangle, Printer, Check, Loader2
+  ExternalLink, AlertTriangle, Printer, Check, Loader2, Copy
 } from 'lucide-react';
 import {
   fetchExporterDashboardStatsApi,
@@ -35,8 +35,11 @@ import {
   fetchExporterNotificationsApi,
   updateExporterProfileApi,
   resendDeliveryConfirmationApi,
-  fetchDeliveryConfirmationApi
+  fetchDeliveryConfirmationApi,
+  fetchEmailDiagnosticsApi,
+  testEmailDispatchApi
 } from '../services/api';
+
 
 const OrderTracker = ({ status, order, shipment }) => {
   const steps = [
@@ -241,6 +244,15 @@ export const ExporterDashboard = () => {
   const [showDeliveryConfirmationModal, setShowDeliveryConfirmationModal] = useState(false);
   const [selectedConfirmationOrder, setSelectedConfirmationOrder] = useState(null);
   const [resendingConfirmationId, setResendingConfirmationId] = useState(null);
+  const [copyingLinkId, setCopyingLinkId] = useState(null);
+  const [generatedLinks, setGeneratedLinks] = useState({});
+
+  // Email System Diagnostics Modal State
+  const [showEmailDiagnosticsModal, setShowEmailDiagnosticsModal] = useState(false);
+  const [emailDiagnostics, setEmailDiagnostics] = useState(null);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+
 
   useEffect(() => {
     loadAllData();
@@ -481,7 +493,21 @@ export const ExporterDashboard = () => {
       const res = await createExporterOrderApi(orderForm);
       if (res.success || res.status === 201 || res.data?.order) {
         const orderCode = res.data?.order?.order_code ? ` (${res.data.order.order_code})` : '';
-        showMsg('success', res.message || `Export order${orderCode} created successfully!`);
+        const orderId = res.data?.order?.id;
+        const emailRes = res.data?.email_result;
+        if (emailRes?.link && orderId) {
+          setGeneratedLinks(prev => ({ ...prev, [orderId]: emailRes.link }));
+        }
+
+        if (emailRes && !emailRes.success) {
+          if (emailRes.link) {
+            try { await navigator.clipboard.writeText(emailRes.link); } catch {}
+          }
+          showMsg('info', `Export order${orderCode} created! Notice: Email not delivered (${emailRes.message || 'SMTP not configured'}). Tracking link copied to clipboard.`);
+        } else {
+          showMsg('success', res.message || `Export order${orderCode} created successfully!`);
+        }
+
         setShowCreateOrderModal(false);
         setOrderForm({
           buyer_id: '', buyer_name: '', company_name: '', email: '', phone: '', address: '',
@@ -491,6 +517,7 @@ export const ExporterDashboard = () => {
         });
         setOrderFormErrors({});
         await loadAllData();
+
       } else {
         showMsg('error', res.message || 'Failed to create export order');
         setOrderFormErrors({ general: res.message || 'Failed to create export order' });
@@ -697,8 +724,20 @@ export const ExporterDashboard = () => {
     try {
       setResendingConfirmationId(orderId);
       const res = await resendDeliveryConfirmationApi(orderId);
-      if (res.success) {
+      if (res.data?.confirmation_link) {
+        setGeneratedLinks(prev => ({ ...prev, [orderId]: res.data.confirmation_link }));
+      }
+
+      if (res.success && res.data?.email_sent) {
         showMsg('success', res.message || 'Delivery confirmation email dispatched to international buyer.');
+        await loadAllData();
+      } else if (res.data?.confirmation_link) {
+        try {
+          await navigator.clipboard.writeText(res.data.confirmation_link);
+          showMsg('info', `Notice: ${res.message || 'Email not sent'}. Live tracking link copied to clipboard!`);
+        } catch {
+          showMsg('info', `Notice: ${res.message || 'Email not sent'}. Link: ${res.data.confirmation_link}`);
+        }
         await loadAllData();
       } else {
         showMsg('error', res.message || 'Failed to send confirmation link.');
@@ -709,6 +748,66 @@ export const ExporterDashboard = () => {
       setResendingConfirmationId(null);
     }
   };
+
+  // Instant Copy Live Tracking / Confirmation Link
+  const handleCopyOrderLink = async (orderId) => {
+    try {
+      setCopyingLinkId(orderId);
+      let link = generatedLinks[orderId];
+      if (!link) {
+        const res = await resendDeliveryConfirmationApi(orderId);
+        if (res.data?.confirmation_link) {
+          link = res.data.confirmation_link;
+          setGeneratedLinks(prev => ({ ...prev, [orderId]: link }));
+        }
+      }
+      if (link) {
+        await navigator.clipboard.writeText(link);
+        showMsg('success', 'Buyer live tracking & confirmation link copied to clipboard!');
+      } else {
+        showMsg('error', 'Could not generate tracking link for this order.');
+      }
+    } catch (err) {
+      showMsg('error', err.message || 'Failed to copy tracking link.');
+    } finally {
+      setCopyingLinkId(null);
+    }
+  };
+
+  // Email System Diagnostics
+  const handleOpenEmailDiagnostics = async () => {
+    setShowEmailDiagnosticsModal(true);
+    try {
+      const res = await fetchEmailDiagnosticsApi();
+      if (res.success && res.data) {
+        setEmailDiagnostics(res.data);
+      }
+    } catch (err) {
+      showMsg('error', err.message || 'Failed to fetch email diagnostics');
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailRecipient) {
+      return showMsg('error', 'Please enter a recipient email address for testing');
+    }
+    setTestingEmail(true);
+    try {
+      const res = await testEmailDispatchApi(testEmailRecipient);
+      if (res.success) {
+        showMsg('success', res.message || 'Test email sent successfully!');
+        if (res.data) setEmailDiagnostics(res.data);
+      } else {
+        showMsg('error', res.message || 'Test email failed.');
+        if (res.data) setEmailDiagnostics(res.data);
+      }
+    } catch (err) {
+      showMsg('error', err.message || 'Failed to send test email');
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
 
   // Open Delivery Confirmation / Dispute Modal
   const handleOpenDeliveryConfirmation = async (order) => {
@@ -1232,10 +1331,33 @@ export const ExporterDashboard = () => {
                     <h2 style={{ fontSize: '1.35rem', fontWeight: '900', color: '#1B4D2E', margin: 0 }}>International Export Orders</h2>
                     <p style={{ fontSize: '0.85rem', color: '#718096', margin: '0.2rem 0 0' }}>Manage global cardamom shipments, quality approval, packaging, documents & tracking.</p>
                   </div>
-                  <button onClick={() => setShowCreateOrderModal(true)} style={{ backgroundColor: '#43A047', color: '#FFFFFF', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '12px', fontWeight: '900', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(67,160,71,0.3)' }}>
-                    <Plus size={16} /> + Create Export Order
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={handleOpenEmailDiagnostics}
+                      title="Inspect live email delivery status and test email dispatch"
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        color: '#0F5A2C',
+                        border: '1.5px solid #CBD5E1',
+                        padding: '0.65rem 1rem',
+                        borderRadius: '12px',
+                        fontWeight: '800',
+                        fontSize: '0.82rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Mail size={15} color="#0F5A2C" /> Email Diagnostics
+                    </button>
+                    <button onClick={() => setShowCreateOrderModal(true)} style={{ backgroundColor: '#43A047', color: '#FFFFFF', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '12px', fontWeight: '900', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(67,160,71,0.3)' }}>
+                      <Plus size={16} /> + Create Export Order
+                    </button>
+                  </div>
                 </div>
+
 
                 {filteredOrders.length === 0 ? (
                   <div style={{ padding: '3rem', textAlign: 'center', color: '#718096', backgroundColor: '#F8FAF8', borderRadius: '14px', fontSize: '0.85rem' }}>
@@ -1324,36 +1446,67 @@ export const ExporterDashboard = () => {
                                   <span>{isDispute ? 'Review Delivery Dispute' : 'View Delivery Confirmation'}</span>
                                 </button>
                               ) : !ord.delivery_confirmation ? (
-                                <button
-                                  type="button"
-                                  disabled={resendingConfirmationId === ord.id}
-                                  onClick={() => handleResendConfirmationLink(ord.id)}
-                                  title={`Send to ${ord.email || ord.buyer_email || 'buyer'}`}
-                                  style={{
-                                    backgroundColor: '#0F5A2C',
-                                    color: '#FFF',
-                                    border: 'none',
-                                    padding: '0.45rem 0.85rem',
-                                    borderRadius: '8px',
-                                    fontSize: '0.78rem',
-                                    fontWeight: '800',
-                                    cursor: resendingConfirmationId === ord.id ? 'not-allowed' : 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.35rem'
-                                  }}
-                                >
-                                  {resendingConfirmationId === ord.id ? (
-                                    <RefreshCw size={14} className="animate-spin" />
-                                  ) : (
-                                    <Mail size={14} />
-                                  )}
-                                  <span>
-                                    {ord.status === 'DELIVERED'
-                                      ? (ord.active_token?.token_type === 'DELIVERY_REVIEW' ? 'Resend Delivery Review' : 'Send Delivery Review Email')
-                                      : (ord.active_token ? 'Resend Order Link' : 'Send Confirmation Email')}
-                                  </span>
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    disabled={resendingConfirmationId === ord.id}
+                                    onClick={() => handleResendConfirmationLink(ord.id)}
+                                    title={`Send to ${ord.email || ord.buyer_email || 'buyer'}`}
+                                    style={{
+                                      backgroundColor: '#0F5A2C',
+                                      color: '#FFF',
+                                      border: 'none',
+                                      padding: '0.45rem 0.85rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: '800',
+                                      cursor: resendingConfirmationId === ord.id ? 'not-allowed' : 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem'
+                                    }}
+                                  >
+                                    {resendingConfirmationId === ord.id ? (
+                                      <RefreshCw size={14} className="animate-spin" />
+                                    ) : (
+                                      <Mail size={14} />
+                                    )}
+                                    <span>
+                                      {ord.status === 'DELIVERED'
+                                        ? (ord.active_token?.token_type === 'DELIVERY_REVIEW' ? 'Resend Delivery Review' : 'Send Delivery Review Email')
+                                        : (ord.active_token ? 'Resend Order Link' : 'Send Confirmation Email')}
+                                    </span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={copyingLinkId === ord.id}
+                                    onClick={() => handleCopyOrderLink(ord.id)}
+                                    title="Copy buyer live order tracking & confirmation link to clipboard"
+                                    style={{
+                                      backgroundColor: '#F8FAFC',
+                                      color: '#0F5A2C',
+                                      border: '1.5px solid #CBD5E1',
+                                      padding: '0.45rem 0.75rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: '700',
+                                      cursor: copyingLinkId === ord.id ? 'not-allowed' : 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem'
+                                    }}
+                                  >
+                                    {copyingLinkId === ord.id ? (
+                                      <RefreshCw size={14} className="animate-spin" />
+                                    ) : generatedLinks[ord.id] ? (
+                                      <Check size={14} color="#16A34A" />
+                                    ) : (
+                                      <Copy size={14} />
+                                    )}
+                                    <span>{generatedLinks[ord.id] ? 'Copied ✓' : 'Copy Link'}</span>
+                                  </button>
+                                </div>
                               ) : null}
 
                               <button onClick={() => { setSelectedOrder(ord); setShowOrderDetailModal(true); }} style={{ backgroundColor: '#2E7D32', color: '#FFF', border: 'none', padding: '0.45rem 0.85rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '800', cursor: 'pointer' }}>
@@ -1436,22 +1589,41 @@ export const ExporterDashboard = () => {
                                 ✉️ Confirmation email sent to <strong>{ord.active_token.sent_to_email || ord.buyer_email}</strong>.
                                 Link expires: {new Date(ord.active_token.expires_at).toLocaleString()}.
                               </span>
-                              <button
-                                type="button"
-                                disabled={resendingConfirmationId === ord.id}
-                                onClick={() => handleResendConfirmationLink(ord.id)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#B45309',
-                                  fontWeight: '800',
-                                  fontSize: '0.75rem',
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline'
-                                }}
-                              >
-                                Resend now
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                <button
+                                  type="button"
+                                  disabled={copyingLinkId === ord.id}
+                                  onClick={() => handleCopyOrderLink(ord.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#0F5A2C',
+                                    fontWeight: '800',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline'
+                                  }}
+                                >
+                                  {generatedLinks[ord.id] ? 'Link Copied ✓' : 'Copy link'}
+                                </button>
+                                <span>•</span>
+                                <button
+                                  type="button"
+                                  disabled={resendingConfirmationId === ord.id}
+                                  onClick={() => handleResendConfirmationLink(ord.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#B45309',
+                                    fontWeight: '800',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline'
+                                  }}
+                                >
+                                  Resend now
+                                </button>
+                              </div>
                             </div>
                           )}
 
@@ -1663,28 +1835,59 @@ export const ExporterDashboard = () => {
                                   <span>{isDispute ? 'Review Dispute' : 'View Delivery Receipt'}</span>
                                 </button>
                               ) : (
-                                <button
-                                  type="button"
-                                  disabled={resendingConfirmationId === ord.id}
-                                  onClick={() => handleResendConfirmationLink(ord.id)}
-                                  title={`Send to ${ord.email || ord.buyer_email || 'buyer'}`}
-                                  style={{
-                                    backgroundColor: ['DELIVERED', 'ARRIVED'].includes(ord.status) ? '#D97706' : '#0F5A2C',
-                                    color: '#FFF',
-                                    border: 'none',
-                                    padding: '0.4rem 0.8rem',
-                                    borderRadius: '8px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '800',
-                                    cursor: resendingConfirmationId === ord.id ? 'not-allowed' : 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.35rem'
-                                  }}
-                                >
-                                  {resendingConfirmationId === ord.id ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
-                                  <span>{['DELIVERED', 'ARRIVED'].includes(ord.status) ? 'Resend Delivery Review' : (ord.buyer_confirmed_order ? 'Resend Order Link' : 'Send Order Confirmation')}</span>
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <button
+                                    type="button"
+                                    disabled={resendingConfirmationId === ord.id}
+                                    onClick={() => handleResendConfirmationLink(ord.id)}
+                                    title={`Send to ${ord.email || ord.buyer_email || 'buyer'}`}
+                                    style={{
+                                      backgroundColor: ['DELIVERED', 'ARRIVED'].includes(ord.status) ? '#D97706' : '#0F5A2C',
+                                      color: '#FFF',
+                                      border: 'none',
+                                      padding: '0.4rem 0.8rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '800',
+                                      cursor: resendingConfirmationId === ord.id ? 'not-allowed' : 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem'
+                                    }}
+                                  >
+                                    {resendingConfirmationId === ord.id ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />}
+                                    <span>{['DELIVERED', 'ARRIVED'].includes(ord.status) ? 'Resend Delivery Review' : (ord.buyer_confirmed_order ? 'Resend Order Link' : 'Send Order Confirmation')}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={copyingLinkId === ord.id}
+                                    onClick={() => handleCopyOrderLink(ord.id)}
+                                    title="Copy buyer live order tracking & confirmation link to clipboard"
+                                    style={{
+                                      backgroundColor: '#F8FAFC',
+                                      color: '#0F5A2C',
+                                      border: '1.5px solid #CBD5E1',
+                                      padding: '0.4rem 0.65rem',
+                                      borderRadius: '8px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '700',
+                                      cursor: copyingLinkId === ord.id ? 'not-allowed' : 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.3rem'
+                                    }}
+                                  >
+                                    {copyingLinkId === ord.id ? (
+                                      <RefreshCw size={13} className="animate-spin" />
+                                    ) : generatedLinks[ord.id] ? (
+                                      <Check size={13} color="#16A34A" />
+                                    ) : (
+                                      <Copy size={13} />
+                                    )}
+                                    <span>{generatedLinks[ord.id] ? 'Copied' : 'Copy'}</span>
+                                  </button>
+                                </div>
                               )}
 
                               <button
@@ -3749,32 +3952,59 @@ export const ExporterDashboard = () => {
                           The buyer has not confirmed receipt of this order yet. You can resend the confirmation
                           link to their saved email address.
                         </p>
-                        <button
-                          type="button"
-                          disabled={resendingConfirmationId === selectedConfirmationOrder.id}
-                          onClick={async () => {
-                            await handleResendConfirmationLink(selectedConfirmationOrder.id);
-                            setShowDeliveryConfirmationModal(false);
-                          }}
-                          style={{
-                            backgroundColor: '#0F5A2C',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            padding: '0.65rem 1.25rem',
-                            borderRadius: '10px',
-                            fontWeight: '800',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.45rem'
-                          }}
-                        >
-                          <Mail size={16} />
-                          <span>Resend Confirmation Email</span>
-                        </button>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            disabled={resendingConfirmationId === selectedConfirmationOrder.id}
+                            onClick={async () => {
+                              await handleResendConfirmationLink(selectedConfirmationOrder.id);
+                              setShowDeliveryConfirmationModal(false);
+                            }}
+                            style={{
+                              backgroundColor: '#0F5A2C',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              padding: '0.65rem 1.25rem',
+                              borderRadius: '10px',
+                              fontWeight: '800',
+                              fontSize: '0.85rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.45rem'
+                            }}
+                          >
+                            <Mail size={16} />
+                            <span>Resend Confirmation Email</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={copyingLinkId === selectedConfirmationOrder.id}
+                            onClick={async () => {
+                              await handleCopyOrderLink(selectedConfirmationOrder.id);
+                            }}
+                            style={{
+                              backgroundColor: '#F8FAFC',
+                              color: '#0F5A2C',
+                              border: '1.5px solid #CBD5E1',
+                              padding: '0.65rem 1.25rem',
+                              borderRadius: '10px',
+                              fontWeight: '800',
+                              fontSize: '0.85rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.45rem'
+                            }}
+                          >
+                            <Copy size={16} />
+                            <span>Copy Live Tracking Link</span>
+                          </button>
+                        </div>
                       </div>
                     )}
+
                   </div>
 
                   {/* Footer */}
@@ -3892,7 +4122,128 @@ export const ExporterDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL 12: EMAIL SYSTEM DIAGNOSTICS & LIVE TEST MODAL */}
+      {showEmailDiagnosticsModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: '1rem' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '20px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #E2E8F0' }}>
+            <div style={{ padding: '1.25rem 1.75rem', borderBottom: '1px solid #E5EBE5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{ backgroundColor: '#E8F5E9', padding: '0.5rem', borderRadius: '10px' }}>
+                  <Mail size={20} color="#0F5A2C" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1B4D2E', margin: 0 }}>
+                    Email System Diagnostics
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0.15rem 0 0' }}>
+                    Inspect production email dispatch settings and verify outbound SMTP/HTTP connectivity
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEmailDiagnosticsModal(false)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#718096' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {/* Cloud Host Warning Banner */}
+              <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '12px', padding: '0.85rem 1rem', fontSize: '0.8rem', color: '#1E40AF', lineHeight: 1.5 }}>
+                <strong>Cloud Host SMTP Notice (Render):</strong>
+                <p style={{ margin: '0.35rem 0 0' }}>
+                  Render blocks outbound traffic on SMTP ports <strong>25, 465, and 587</strong> on free tier instances. 
+                  If emails are failing in production, add a free <strong>RESEND_API_KEY</strong> (3,000 emails/mo) in Render Environment Variables for 100% reliable HTTPS delivery.
+                </p>
+              </div>
+
+              {/* Status Matrix */}
+              {emailDiagnostics ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1E293B', margin: 0 }}>Active Configuration</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.65rem', backgroundColor: '#F8FAFC', padding: '0.9rem', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '0.8rem' }}>
+                    <div><strong>Backend:</strong> <code style={{ fontSize: '0.75rem' }}>{emailDiagnostics.backend?.split('.').pop() || 'Unknown'}</code></div>
+                    <div><strong>SMTP Host:</strong> {emailDiagnostics.email_host}:{emailDiagnostics.email_port}</div>
+                    <div><strong>Security:</strong> {emailDiagnostics.email_use_ssl ? 'SSL (Port 465)' : (emailDiagnostics.email_use_tls ? 'TLS (Port 587)' : 'Plain')}</div>
+                    <div><strong>Account Configured:</strong> {emailDiagnostics.email_host_user_configured ? `✓ (${emailDiagnostics.email_host_user_masked})` : '❌ NOT CONFIGURED'}</div>
+                    <div><strong>Password Set:</strong> {emailDiagnostics.email_host_password_configured ? `✓ (${emailDiagnostics.email_host_password_length} chars)` : '❌ NOT SET'}</div>
+                    <div><strong>Resend (Port 443):</strong> {emailDiagnostics.resend_configured ? '✓ Active' : 'Not configured'}</div>
+                    <div style={{ gridColumn: '1 / -1' }}><strong>From Email:</strong> {emailDiagnostics.default_from_email}</div>
+                    <div style={{ gridColumn: '1 / -1' }}><strong>Frontend URL:</strong> {emailDiagnostics.frontend_url}</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '1rem', color: '#64748B' }}>
+                  <RefreshCw size={18} className="animate-spin" style={{ margin: '0 auto 0.5rem' }} />
+                  <span>Loading server diagnostics...</span>
+                </div>
+              )}
+
+              {/* Live Test Dispatch */}
+              <div style={{ backgroundColor: '#F8FAF8', border: '1px solid #D1E7DD', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <h4 style={{ fontSize: '0.88rem', fontWeight: '800', color: '#1B4D2E', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Send size={15} color="#16A34A" /> Send Live Verification Email
+                </h4>
+                <p style={{ fontSize: '0.78rem', color: '#64748B', margin: 0 }}>
+                  Test outbound email connectivity right now by sending a verification message to any inbox.
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <input
+                    type="email"
+                    value={testEmailRecipient}
+                    onChange={(e) => setTestEmailRecipient(e.target.value)}
+                    placeholder="Enter recipient email (e.g. your email)"
+                    style={{
+                      flex: 1,
+                      minWidth: '220px',
+                      padding: '0.55rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '0.82rem'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={testingEmail}
+                    onClick={handleSendTestEmail}
+                    style={{
+                      backgroundColor: '#0F5A2C',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '0.55rem 1.15rem',
+                      borderRadius: '8px',
+                      fontWeight: '800',
+                      fontSize: '0.82rem',
+                      cursor: testingEmail ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    {testingEmail ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+                    <span>{testingEmail ? 'Testing...' : 'Send Test'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1rem 1.75rem', borderTop: '1px solid #E5EBE5', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#F8FAFC' }}>
+              <button
+                type="button"
+                onClick={() => setShowEmailDiagnosticsModal(false)}
+                style={{ backgroundColor: '#2E7D32', color: '#FFFFFF', border: 'none', padding: '0.55rem 1.25rem', borderRadius: '10px', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 

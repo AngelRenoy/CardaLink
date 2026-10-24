@@ -109,5 +109,7 @@ urlpatterns = [
     path('buyer/delivery/confirm', views.buyer_delivery_confirm),
     path('exporter/orders/<int:order_id>/send-confirmation', views.exporter_order_resend_delivery_confirmation),
     path('exporter/orders/<int:order_id>/delivery-confirmation', views.exporter_order_delivery_confirmation_detail),
+    path('system/email-diagnostics', views.email_diagnostics),
 ]
+
 

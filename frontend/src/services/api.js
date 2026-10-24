@@ -265,6 +265,12 @@ export const confirmBuyerDeliveryApi = (formDataOrPayload) => {
 };
 export const resendDeliveryConfirmationApi = (orderId) => request(`/exporter/orders/${orderId}/send-confirmation`, { method: 'POST' });
 export const fetchDeliveryConfirmationApi = (orderId) => request(`/exporter/orders/${orderId}/delivery-confirmation`);
+export const fetchEmailDiagnosticsApi = () => request('/system/email-diagnostics');
+export const testEmailDispatchApi = (recipient) => request('/system/email-diagnostics', {
+  method: 'POST',
+  body: JSON.stringify({ recipient }),
+});
+
 
 
 
