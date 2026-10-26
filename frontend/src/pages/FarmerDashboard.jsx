@@ -1697,13 +1697,13 @@ export const FarmerDashboard = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#F8FAF8', borderBottom: '1px solid #E5EBE5' }}>
-                    <th style={{ padding: '0.75rem' }}>Date Applied</th>
-                    <th style={{ padding: '0.75rem' }}>Next Date to Apply</th>
-                    <th style={{ padding: '0.75rem' }}>Plantation</th>
-                    <th style={{ padding: '0.75rem' }}>Product Name</th>
-                    <th style={{ padding: '0.75rem' }}>Quantity</th>
-                    <th style={{ padding: '0.75rem' }}>Cost</th>
-                    <th style={{ padding: '0.75rem' }}>Purpose</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Date Applied</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Next Date to Apply</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Plantation</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Product Name</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Quantity</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Cost</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Purpose</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1735,11 +1735,11 @@ export const FarmerDashboard = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#F8FAF8', borderBottom: '1px solid #E5EBE5' }}>
-                    <th style={{ padding: '0.75rem' }}>Date</th>
-                    <th style={{ padding: '0.75rem' }}>Plantation</th>
-                    <th style={{ padding: '0.75rem' }}>Method</th>
-                    <th style={{ padding: '0.75rem' }}>Duration</th>
-                    <th style={{ padding: '0.75rem' }}>Water Volume</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Date</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Plantation</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Method</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Duration</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Water Volume</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2985,7 +2985,7 @@ export const FarmerDashboard = () => {
 
       {showAddAgrochemicalModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '24px', width: '100%', maxWidth: '440px', padding: '2rem' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '24px', width: '100%', maxWidth: '440px', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1B4D2E' }}>Record Agrochemical Usage</h3>
               <button onClick={() => setShowAddAgrochemicalModal(false)} style={{ background: 'none', border: 'none' }}><X size={20} /></button>
@@ -3045,6 +3045,16 @@ export const FarmerDashboard = () => {
                       setAgrochemicalForm({ ...agrochemicalForm, cost: val });
                     }
                   }}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: '800' }}>Purpose</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pest control, Growth boost"
+                  value={agrochemicalForm.purpose}
+                  onChange={e => setAgrochemicalForm({ ...agrochemicalForm, purpose: e.target.value })}
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #CBD5E1' }}
                 />
               </div>

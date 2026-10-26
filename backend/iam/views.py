@@ -3,6 +3,7 @@ import re
 import secrets
 import urllib.parse
 import requests
+from django.conf import settings
 from django.db import connection, transaction
 from django.utils import timezone
 from django.shortcuts import redirect
@@ -3097,7 +3098,7 @@ def check_trader_auth(request):
 def check_exporter_auth(request):
     if not request.user or not request.user.is_authenticated:
         return send_error(status.HTTP_401_UNAUTHORIZED, 'Authentication required')
-    if request.user.role != 'EXPORTER':
+    if request.user.role not in ['EXPORTER', 'ADMIN']:
         return send_error(status.HTTP_403_FORBIDDEN, 'IAM Authorization Error: Role [EXPORTER] required')
     if request.user.status != 'APPROVED':
         return send_error(status.HTTP_403_FORBIDDEN, 'Account approval required')

@@ -71,6 +71,21 @@ def dispatch_cardalink_email(subject: str, plain_message: str, html_message: str
     brevo_key = getattr(settings, 'BREVO_API_KEY', '').strip()
     if brevo_key:
         try:
+            sender_email = getattr(settings, 'EMAIL_HOST_USER', '').strip()
+            if not sender_email or '@' not in sender_email:
+                default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '')
+                if '<' in default_from and '>' in default_from:
+                    sender_email = default_from.split('<')[1].split('>')[0].strip()
+                elif '@' in default_from:
+                    sender_email = default_from.strip()
+            if not sender_email or '@' not in sender_email:
+                sender_email = 'angel.renoy19@gmail.com'
+
+            sender_name = "CardaLink Exports"
+            default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '')
+            if '<' in default_from:
+                sender_name = default_from.split('<')[0].strip() or sender_name
+
             res = requests.post(
                 "https://api.brevo.com/v3/smtp/email",
                 headers={
@@ -78,7 +93,7 @@ def dispatch_cardalink_email(subject: str, plain_message: str, html_message: str
                     "Content-Type": "application/json"
                 },
                 json={
-                    "sender": {"name": "CardaLink Exports", "email": getattr(settings, 'EMAIL_HOST_USER', '') or "exports@cardalink.com"},
+                    "sender": {"name": sender_name, "email": sender_email},
                     "to": [{"email": recipient_email}],
                     "subject": subject,
                     "htmlContent": html_message,
@@ -90,8 +105,18 @@ def dispatch_cardalink_email(subject: str, plain_message: str, html_message: str
                 return {"success": True, "message": f"Confirmation email sent to {recipient_email} via Brevo."}
             else:
                 logger.warning(f"Brevo API error ({res.status_code}): {res.text}")
+                return {
+                    "success": False,
+                    "error": f"BREVO_API_ERROR_{res.status_code}",
+                    "message": f"Brevo API error ({res.status_code}): {res.text}"
+                }
         except Exception as e:
             logger.warning(f"Brevo dispatch failed: {e}")
+            return {
+                "success": False,
+                "error": "BREVO_EXCEPTION",
+                "message": f"Brevo dispatch failed: {str(e)}"
+            }
 
     # 2. Check SMTP Credentials
     email_user = getattr(settings, 'EMAIL_HOST_USER', '').strip()
