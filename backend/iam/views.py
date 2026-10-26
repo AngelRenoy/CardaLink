@@ -4497,47 +4497,53 @@ def email_diagnostics(request):
     if user.role not in ['EXPORTER', 'ADMIN']:
         return send_error(status.HTTP_403_FORBIDDEN, 'Authorized for Exporters and Administrators only')
 
-    backend_name = getattr(settings, 'EMAIL_BACKEND', '')
-    email_user = getattr(settings, 'EMAIL_HOST_USER', '')
-    email_pwd = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-    resend_key = getattr(settings, 'RESEND_API_KEY', '')
-    brevo_key = getattr(settings, 'BREVO_API_KEY', '')
+    try:
+        backend_name = str(getattr(settings, 'EMAIL_BACKEND', '') or '')
+        email_user = str(getattr(settings, 'EMAIL_HOST_USER', '') or '')
+        email_pwd = str(getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '')
+        resend_key = str(getattr(settings, 'RESEND_API_KEY', '') or '')
+        brevo_key = str(getattr(settings, 'BREVO_API_KEY', '') or '')
 
-    data = {
-        'backend': backend_name,
-        'email_host': getattr(settings, 'EMAIL_HOST', ''),
-        'email_port': getattr(settings, 'EMAIL_PORT', ''),
-        'email_use_tls': getattr(settings, 'EMAIL_USE_TLS', False),
-        'email_use_ssl': getattr(settings, 'EMAIL_USE_SSL', False),
-        'email_host_user_configured': bool(email_user),
-        'email_host_user_masked': (email_user[:3] + '***@' + email_user.split('@')[1]) if '@' in email_user else ('configured' if email_user else 'NOT_SET'),
-        'email_host_password_configured': bool(email_pwd),
-        'email_host_password_length': len(email_pwd),
-        'default_from_email': getattr(settings, 'DEFAULT_FROM_EMAIL', ''),
-        'frontend_url': getattr(settings, 'FRONTEND_URL', ''),
-        'resend_configured': bool(resend_key),
-        'brevo_configured': bool(brevo_key),
-        'is_render': bool(os.getenv('RENDER') or os.getenv('RENDER_EXTERNAL_URL')),
-    }
+        data = {
+            'backend': backend_name,
+            'email_host': str(getattr(settings, 'EMAIL_HOST', '') or ''),
+            'email_port': str(getattr(settings, 'EMAIL_PORT', '') or ''),
+            'email_use_tls': bool(getattr(settings, 'EMAIL_USE_TLS', False)),
+            'email_use_ssl': bool(getattr(settings, 'EMAIL_USE_SSL', False)),
+            'email_host_user_configured': bool(email_user),
+            'email_host_user_masked': (email_user[:3] + '***@' + email_user.split('@')[1]) if '@' in email_user else ('configured' if email_user else 'NOT_SET'),
+            'email_host_password_configured': bool(email_pwd),
+            'email_host_password_length': len(email_pwd),
+            'default_from_email': str(getattr(settings, 'DEFAULT_FROM_EMAIL', '') or ''),
+            'frontend_url': str(getattr(settings, 'FRONTEND_URL', '') or ''),
+            'resend_configured': bool(resend_key),
+            'brevo_configured': bool(brevo_key),
+            'is_render': bool(os.getenv('RENDER') or os.getenv('RENDER_EXTERNAL_URL')),
+        }
 
-    if request.method == 'POST':
-        recipient = (request.data.get('recipient') or user.email or '').strip()
-        if not recipient:
-            return send_error(status.HTTP_400_BAD_REQUEST, 'Recipient email is required for test email')
+        if request.method == 'POST':
+            recipient = (request.data.get('recipient') or user.email or '').strip()
+            if not recipient:
+                return send_error(status.HTTP_400_BAD_REQUEST, 'Recipient email is required for test email')
 
-        test_res = dispatch_cardalink_email(
-            subject="CardaLink Live Diagnostics — Test Email",
-            plain_message=f"Hello {user.full_name},\n\nThis is a verified test email sent from your CardaLink production server.\nEmail subsystem is active and operating normally.",
-            html_message=f"<h3>CardaLink System Test</h3><p>Hello <strong>{user.full_name}</strong>,</p><p>This is a verified test email dispatched from CardaLink. Your email configuration is operating properly.</p>",
-            recipient_email=recipient
-        )
-        data['test_dispatch'] = test_res
-        if test_res.get('success'):
-            return send_response(status.HTTP_200_OK, f'Test email sent successfully to {recipient}', data)
-        else:
-            return send_response(status.HTTP_200_OK, f'Test email failed: {test_res.get("message")}', data)
+            test_res = dispatch_cardalink_email(
+                subject="CardaLink Live Diagnostics — Test Email",
+                plain_message=f"Hello {user.full_name},\n\nThis is a verified test email sent from your CardaLink production server.\nEmail subsystem is active and operating normally.",
+                html_message=f"<h3>CardaLink System Test</h3><p>Hello <strong>{user.full_name}</strong>,</p><p>This is a verified test email dispatched from CardaLink. Your email configuration is operating properly.</p>",
+                recipient_email=recipient
+            )
+            data['test_dispatch'] = test_res
+            if test_res.get('success'):
+                return send_response(status.HTTP_200_OK, f'Test email sent successfully to {recipient}', data)
+            else:
+                return send_response(status.HTTP_200_OK, f'Test email failed: {test_res.get("message")}', data)
 
-    return send_response(status.HTTP_200_OK, 'Email diagnostics retrieved', data)
+        return send_response(status.HTTP_200_OK, 'Email diagnostics retrieved', data)
+    except Exception as e:
+        import traceback
+        err_detail = traceback.format_exc()
+        logger.error(f"email_diagnostics error: {err_detail}")
+        return send_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Diagnostics error: {str(e)}", data={'traceback': err_detail})
 
 
 
