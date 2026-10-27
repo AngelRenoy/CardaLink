@@ -2,6 +2,7 @@ import os
 import re
 import secrets
 import urllib.parse
+from decimal import Decimal
 import requests
 from django.conf import settings
 from django.db import connection, transaction
@@ -663,6 +664,70 @@ def admin_get_plantations(request):
     serializer = PlantationSerializer(plantations, many=True)
     return send_response(status.HTTP_200_OK, 'Plantations retrieved', {'plantations': serializer.data})
 
+DEFAULT_CARDAMOM_VARIETIES_SEED = [
+    {
+        'name': 'Njallani Green Gold',
+        'code': 'VAR_NJALLANI',
+        'description': 'High-yield cardamom variety developed in Idukki, renowned for dense capsule clusters and disease tolerance.',
+        'optimal_altitude': '800m - 1200m MSL',
+        'yield_potential_kg_acre': Decimal('450.00'),
+    },
+    {
+        'name': 'Green Gold Bold',
+        'code': 'VAR_GREEN_GOLD',
+        'description': 'Large capsule 8mm+ bold green cardamom, premium export grade choice.',
+        'optimal_altitude': '900m - 1300m MSL',
+        'yield_potential_kg_acre': Decimal('500.00'),
+    },
+    {
+        'name': 'Vandalmedu Special',
+        'code': 'VAR_VANDAL',
+        'description': 'Aromatic small cardamom with intense essential oils and high cineole content.',
+        'optimal_altitude': '700m - 1100m MSL',
+        'yield_potential_kg_acre': Decimal('380.00'),
+    },
+    {
+        'name': 'Vanderperiyar',
+        'code': 'VAR_VANDERPERIYAR',
+        'description': 'Resilient traditional variety suited for mist-covered sloping terrains.',
+        'optimal_altitude': '850m - 1250m MSL',
+        'yield_potential_kg_acre': Decimal('400.00'),
+    },
+    {
+        'name': 'Palakudi',
+        'code': 'VAR_PALAKUDI',
+        'description': 'Popular shade-tolerant variety delivering consistent bold harvest yield.',
+        'optimal_altitude': '800m - 1100m MSL',
+        'yield_potential_kg_acre': Decimal('420.00'),
+    },
+    {
+        'name': 'Panikulangara',
+        'code': 'VAR_PANIKULANGARA',
+        'description': 'Vigorous tiller production with uniform capsule maturation.',
+        'optimal_altitude': '750m - 1150m MSL',
+        'yield_potential_kg_acre': Decimal('410.00'),
+    },
+    {
+        'name': 'Appangala',
+        'code': 'VAR_APPANGALA',
+        'description': 'High katte-virus tolerant hybrid variety selected by ICAR-IISR.',
+        'optimal_altitude': '800m - 1300m MSL',
+        'yield_potential_kg_acre': Decimal('460.00'),
+    },
+]
+
+def ensure_default_cardamom_varieties():
+    try:
+        if CardamomVariety.objects.count() == 0:
+            for item in DEFAULT_CARDAMOM_VARIETIES_SEED:
+                CardamomVariety.objects.get_or_create(
+                    code=item['code'],
+                    defaults=item
+                )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Unable to auto-seed CardamomVariety: %s", e)
+
 # 20. Admin Cardamom Varieties List
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -671,6 +736,7 @@ def admin_get_varieties(request):
     if request.user.role != 'ADMIN':
         return send_error(status.HTTP_403_FORBIDDEN, 'IAM Authorization Error: Role [ADMIN] required')
 
+    ensure_default_cardamom_varieties()
     varieties = CardamomVariety.objects.all().order_by('name')
     serializer = CardamomVarietySerializer(varieties, many=True)
     return send_response(status.HTTP_200_OK, 'Cardamom varieties retrieved', {'varieties': serializer.data})
@@ -1615,6 +1681,7 @@ def farmer_varieties_list_create(request):
     if auth_err: return auth_err
 
     if request.method == 'GET':
+        ensure_default_cardamom_varieties()
         varieties = CardamomVariety.objects.all().order_by('name')
         serializer = CardamomVarietySerializer(varieties, many=True)
         return send_response(status.HTTP_200_OK, 'Varieties loaded', {'varieties': serializer.data})

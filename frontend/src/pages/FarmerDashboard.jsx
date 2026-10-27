@@ -38,6 +38,16 @@ import {
   updateCycleDryKgApi
 } from '../services/api';
 
+const DEFAULT_CARDAMOM_VARIETIES = [
+  { id: 'v1', name: 'Njallani Green Gold' },
+  { id: 'v2', name: 'Green Gold Bold' },
+  { id: 'v3', name: 'Vandalmedu Special' },
+  { id: 'v4', name: 'Vanderperiyar' },
+  { id: 'v5', name: 'Palakudi' },
+  { id: 'v6', name: 'Panikulangara' },
+  { id: 'v7', name: 'Appangala' }
+];
+
 const StatusTracker = ({ status }) => {
   const steps = [
     { key: 'PENDING', label: 'PENDING' },
@@ -271,16 +281,23 @@ export const FarmerDashboard = () => {
         const pList = plantationsRes.data?.plantations || [];
         setPlantations(pList);
         if (pList.length > 0 && !cycleForm.plantation_id) {
-          setCycleForm(prev => ({ ...prev, plantation_id: pList[0].id }));
+          setCycleForm(prev => ({
+            ...prev,
+            plantation_id: pList[0].id,
+            variety: pList[0].variety || prev.variety
+          }));
         }
       }
-      if (varietiesRes.success) {
-        const vList = varietiesRes.data?.varieties || [];
-        setVarieties(vList);
-        if (vList.length > 0 && !cycleForm.variety) {
-          setCycleForm(prev => ({ ...prev, variety: vList[0].name }));
+      const vList = (varietiesRes?.success && Array.isArray(varietiesRes.data?.varieties) && varietiesRes.data.varieties.length > 0)
+        ? varietiesRes.data.varieties
+        : DEFAULT_CARDAMOM_VARIETIES;
+      setVarieties(vList);
+      setCycleForm(prev => {
+        if (!prev.variety || !vList.some(v => v.name === prev.variety)) {
+          return { ...prev, variety: vList[0]?.name || 'Njallani Green Gold' };
         }
-      }
+        return prev;
+      });
       if (agroRes.success) setAgrochemicals(agroRes.data?.agrochemicals || []);
       if (irrRes.success) setIrrigations(irrRes.data?.irrigations || []);
       if (invRes.success) setInventory(invRes.data?.inventory || []);
@@ -2560,7 +2577,15 @@ export const FarmerDashboard = () => {
                 <select
                   required
                   value={cycleForm.plantation_id}
-                  onChange={e => setCycleForm({ ...cycleForm, plantation_id: e.target.value })}
+                  onChange={e => {
+                    const selectedId = e.target.value;
+                    const matchedPlantation = plantations.find(p => String(p.id) === String(selectedId));
+                    setCycleForm(prev => ({
+                      ...prev,
+                      plantation_id: selectedId,
+                      variety: matchedPlantation?.variety || prev.variety || (varieties[0]?.name || DEFAULT_CARDAMOM_VARIETIES[0].name)
+                    }));
+                  }}
                   style={{ width: '100%', padding: '0.65rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem' }}
                 >
                   <option value="">Select My Plantation...</option>
@@ -2571,9 +2596,18 @@ export const FarmerDashboard = () => {
               </div>
 
               <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2D3748', display: 'block', marginBottom: '0.35rem' }}>
-                  Cardamom Variety *
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2D3748' }}>
+                    Cardamom Variety *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddVarietyModal(true)}
+                    style={{ background: 'none', border: 'none', color: '#16A34A', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer', padding: 0 }}
+                  >
+                    + Add New Variety
+                  </button>
+                </div>
                 <select
                   required
                   value={cycleForm.variety}
@@ -2581,8 +2615,8 @@ export const FarmerDashboard = () => {
                   style={{ width: '100%', padding: '0.65rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '0.88rem' }}
                 >
                   <option value="">Select Variety...</option>
-                  {varieties.map(v => (
-                    <option key={v.id} value={v.name}>{v.name}</option>
+                  {(varieties && varieties.length > 0 ? varieties : DEFAULT_CARDAMOM_VARIETIES).map(v => (
+                    <option key={v.id || v.code || v.name} value={v.name}>{v.name}</option>
                   ))}
                 </select>
               </div>
@@ -3110,15 +3144,8 @@ export const FarmerDashboard = () => {
                   style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #CBD5E1' }}
                 >
                   <option value="">Select Variety...</option>
-                  {(varieties.length > 0 ? varieties : [
-                    { id: 'v1', name: 'Njallani Gold' },
-                    { id: 'v2', name: 'Green Gold' },
-                    { id: 'v3', name: 'Vanderperiyar' },
-                    { id: 'v4', name: 'Palakudi' },
-                    { id: 'v5', name: 'Panikulangara' },
-                    { id: 'v6', name: 'Appangala' }
-                  ]).map(v => (
-                    <option key={v.id || v.name} value={v.name}>{v.name}</option>
+                  {(varieties && varieties.length > 0 ? varieties : DEFAULT_CARDAMOM_VARIETIES).map(v => (
+                    <option key={v.id || v.code || v.name} value={v.name}>{v.name}</option>
                   ))}
                 </select>
               </div>
