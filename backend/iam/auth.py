@@ -131,3 +131,62 @@ class JWTAuthentication(BaseAuthentication):
 
         user.permissions = get_permissions_for_role(user.role)
         return (user, token)
+
+
+def generate_password_reset_token(user):
+    """
+    Generates a secure 1-hour password reset token bound to user ID and current password hash.
+    Once the password is changed, the token is automatically invalidated.
+    """
+    header = {'alg': 'HS256', 'typ': 'RESET'}
+    payload = {
+        'userId': user.id,
+        'email': user.email,
+        'pwh': hashlib.sha256(user.password_hash.encode('utf-8')).hexdigest()[:16],
+        'exp': int(time.time()) + 3600,
+        'iat': int(time.time()),
+        'action': 'password_reset'
+    }
+    header_b64 = _base64url_encode(json.dumps(header, separators=(',', ':')).encode('utf-8'))
+    payload_b64 = _base64url_encode(json.dumps(payload, separators=(',', ':')).encode('utf-8'))
+    signing_input = f"{header_b64}.{payload_b64}".encode('utf-8')
+    signature = hmac.new(JWT_SECRET.encode('utf-8'), signing_input, hashlib.sha256).digest()
+    signature_b64 = _base64url_encode(signature)
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+
+def verify_password_reset_token(token):
+    """
+    Validates a password reset token.
+    Returns (user, None) if valid, or (None, error_message) if invalid/expired.
+    """
+    try:
+        if not token or not isinstance(token, str):
+            return None, 'Password reset token is missing.'
+        parts = token.strip().split('.')
+        if len(parts) != 3:
+            return None, 'Password reset link is invalid or malformed.'
+        header_b64, payload_b64, signature_b64 = parts
+        signing_input = f"{header_b64}.{payload_b64}".encode('utf-8')
+        expected_sig = hmac.new(JWT_SECRET.encode('utf-8'), signing_input, hashlib.sha256).digest()
+        actual_sig = _base64url_decode(signature_b64)
+        if not hmac.compare_digest(expected_sig, actual_sig):
+            return None, 'Password reset link signature is invalid.'
+        payload = json.loads(_base64url_decode(payload_b64).decode('utf-8'))
+        if payload.get('action') != 'password_reset':
+            return None, 'Invalid token action.'
+        if 'exp' in payload and time.time() > payload['exp']:
+            return None, 'Password reset link has expired. Please request a new one.'
+        user_id = payload.get('userId')
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None, 'User account no longer exists.'
+        # Ensure password hasn't already been changed with this token
+        current_pwh = hashlib.sha256(user.password_hash.encode('utf-8')).hexdigest()[:16]
+        if payload.get('pwh') != current_pwh:
+            return None, 'This password reset link has already been used. Please request a new one.'
+        return user, None
+    except Exception as e:
+        return None, 'Invalid or expired password reset link.'
+

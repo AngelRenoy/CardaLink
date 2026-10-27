@@ -45,7 +45,10 @@ from iam.delivery_service import (
 )
 
 from iam.config import get_permissions_for_role, PERMISSIONS
-from iam.auth import generate_jwt_token, hash_password, check_password, JWTAuthentication
+from iam.auth import (
+    generate_jwt_token, hash_password, check_password, JWTAuthentication,
+    generate_password_reset_token, verify_password_reset_token
+)
 
 def get_client_ip(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -469,6 +472,169 @@ def change_password(request):
         details='Password updated successfully', ip_address=get_client_ip(request)
     )
     return send_response(status.HTTP_200_OK, 'Password changed successfully')
+
+# 9a. Authentication: Request Password Reset Link (Forgot Password)
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    email = (request.data.get('email') or '').strip().lower()
+    if not email:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Please provide your registered email address.')
+
+    user = User.objects.filter(email__iexact=email).first()
+
+    # Determine dynamic frontend URL (works locally and in production on Vercel)
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    if origin:
+        parsed_origin = urllib.parse.urlparse(origin)
+        if parsed_origin.scheme and parsed_origin.netloc:
+            frontend_base = f"{parsed_origin.scheme}://{parsed_origin.netloc}"
+
+    if not user:
+        AuditLog.objects.create(
+            email=email, action='PASSWORD_RESET_ATTEMPT_UNKNOWN_EMAIL',
+            details=f"Password reset attempted for non-existent email: {email}",
+            ip_address=get_client_ip(request)
+        )
+        return send_response(
+            status.HTTP_200_OK,
+            'If an account with this email exists, a password reset link has been dispatched to your inbox.'
+        )
+
+    # User exists: generate reset token
+    reset_token = generate_password_reset_token(user)
+    reset_url = f"{frontend_base}/reset-password?token={reset_token}"
+
+    subject = "CardaLink - Password Reset Request"
+    plain_msg = (
+        f"Hello {user.full_name},\n\n"
+        f"We received a request to reset your password for your CardaLink account ({user.email}).\n\n"
+        f"Click the link below (or paste it into your browser) to reset your password:\n"
+        f"{reset_url}\n\n"
+        f"This secure link will expire in 1 hour.\n\n"
+        f"If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.\n\n"
+        f"Regards,\n"
+        f"CardaLink Security & Support Team"
+    )
+
+    html_msg = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>CardaLink Password Reset</title>
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FAF8; margin: 0; padding: 24px; color: #1E293B;">
+      <div style="max-width: 560px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        
+        <div style="background-color: #1B4D2E; padding: 24px 32px; text-align: center;">
+          <h1 style="color: #FFFFFF; font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">
+            🌿 CardaLink
+          </h1>
+          <p style="color: #A7F3D0; font-size: 13px; margin: 4px 0 0 0; font-weight: 500;">
+            Smart Cardamom Plantation & Export Management System
+          </p>
+        </div>
+
+        <div style="padding: 32px 32px 24px 32px;">
+          <h2 style="color: #0F172A; font-size: 19px; font-weight: 800; margin-top: 0; margin-bottom: 12px;">
+            Password Reset Request
+          </h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
+            Hello <strong>{user.full_name}</strong>,<br>
+            We received a request to reset the password associated with your account (<strong>{user.email}</strong>).
+          </p>
+
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="{reset_url}" target="_blank" style="display: inline-block; background-color: #16A34A; color: #FFFFFF; text-decoration: none; padding: 13px 28px; border-radius: 10px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);">
+              Reset My Password
+            </a>
+          </div>
+
+          <p style="color: #64748B; font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+            Or copy and paste this link into your browser:<br>
+            <a href="{reset_url}" style="color: #16A34A; word-break: break-all; font-size: 12px;">{reset_url}</a>
+          </p>
+
+          <div style="background-color: #F1F5F9; border-radius: 8px; padding: 12px 16px; margin: 24px 0 16px 0;">
+            <p style="color: #64748B; font-size: 12px; margin: 0; line-height: 1.5;">
+              ⏱ <strong>Note:</strong> This link is valid for <strong>1 hour</strong> and can only be used once.<br>
+              If you did not request this reset, you can safely ignore this email.
+            </p>
+          </div>
+        </div>
+
+        <div style="background-color: #F8FAF8; padding: 16px 32px; border-top: 1px solid #E2E8F0; text-align: center;">
+          <p style="color: #94A3B8; font-size: 11px; margin: 0;">
+            © CardaLink • High Range Cardamom Belt, Idukki, Kerala
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    email_res = dispatch_cardalink_email(subject, plain_msg, html_msg, user.email)
+
+    AuditLog.objects.create(
+        user=user, email=user.email, action='PASSWORD_RESET_REQUESTED',
+        details=f"Password reset email dispatched. Status: {email_res.get('message', 'Dispatched')}",
+        ip_address=get_client_ip(request)
+    )
+
+    return send_response(
+        status.HTTP_200_OK,
+        f"Password reset link sent to {user.email}! Please check your inbox and spam folder.",
+        {'reset_link': reset_url if settings.DEBUG else None}
+    )
+
+
+# 9b. Authentication: Verify Reset Token & Update Password
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def reset_password(request):
+    token = (request.data.get('token') or '').strip()
+    new_password = (request.data.get('new_password') or request.data.get('newPassword') or '').strip()
+
+    if not token:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'Password reset token is required.')
+
+    user, token_err = verify_password_reset_token(token)
+    if token_err:
+        return send_error(status.HTTP_400_BAD_REQUEST, token_err)
+
+    if not new_password:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'New password is required.')
+
+    if len(new_password) < 8:
+        return send_error(status.HTTP_400_BAD_REQUEST, 'New password must be at least 8 characters long.')
+
+    password_complexity_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]).{8,}$'
+    if not re.match(password_complexity_regex, new_password):
+        return send_error(status.HTTP_400_BAD_REQUEST, 'New password must contain uppercase, lowercase, number, and special character.')
+
+    user.password_hash = hash_password(new_password)
+    user.save()
+
+    AuditLog.objects.create(
+        user=user, email=user.email, action='PASSWORD_RESET_COMPLETED',
+        details='Password reset successfully via reset token',
+        ip_address=get_client_ip(request)
+    )
+
+    try:
+        confirm_subject = "CardaLink - Your Password Has Been Updated"
+        confirm_plain = f"Hello {user.full_name},\n\nYour CardaLink account password was successfully reset.\nIf you did not perform this action, please contact support immediately.\n\nRegards,\nCardaLink Security Team"
+        confirm_html = f"<p>Hello <strong>{user.full_name}</strong>,</p><p>Your CardaLink account password was successfully updated.</p><p>If you did not initiate this change, please contact administration immediately.</p>"
+        dispatch_cardalink_email(confirm_subject, confirm_plain, confirm_html, user.email)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not send password reset confirmation email: %s", e)
+
+    return send_response(status.HTTP_200_OK, 'Your password has been successfully reset! You can now log in with your new password.')
 
 # 10. Admin: Get All Users
 @api_view(['GET'])

@@ -59,6 +59,20 @@ export const loginApi = (credentials) => {
   });
 };
 
+export const forgotPasswordApi = (data) => {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const resetPasswordApi = (data) => {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
 export const googleAuthApi = (payload) => {
   return request('/auth/google', {
     method: 'POST',

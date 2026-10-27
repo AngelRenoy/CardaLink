@@ -14,6 +14,8 @@ urlpatterns = [
     path('auth/me', views.get_me),
     path('auth/logout', views.logout),
     path('auth/change-password', views.change_password),
+    path('auth/forgot-password', views.forgot_password),
+    path('auth/reset-password', views.reset_password),
     path('auth/iam-test-farmer-inventory', views.iam_test_farmer_inventory),
     path('auth/iam-test-admin-only', views.iam_test_admin_only),
 

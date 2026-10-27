@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sprout, LogIn, Lock, Mail, AlertCircle, ArrowLeft, Eye, EyeOff, X, KeyRound, Shield, AlertTriangle } from 'lucide-react';
+import { Sprout, LogIn, Lock, Mail, AlertCircle, ArrowLeft, Eye, EyeOff, X, KeyRound, Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { validateLoginForm } from '../utils/validators';
-import { getMeApi, API_BASE_URL } from '../services/api';
+import { getMeApi, API_BASE_URL, forgotPasswordApi } from '../services/api';
 
 export const LoginPage = () => {
   const { login, googleAuth, confirmGoogleRole, setAuthSession } = useAuth();
@@ -19,6 +19,11 @@ export const LoginPage = () => {
   const [serverError, setServerError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [debugResetLink, setDebugResetLink] = useState('');
 
   // New Google User Role Selection Modal State
   const [googleAuthData, setGoogleAuthData] = useState(null); // Stores Google Auth response needing role
@@ -243,7 +248,13 @@ export const LoginPage = () => {
               <label style={{ ...labelStyle, margin: 0 }}>Password *</label>
               <button
                 type="button"
-                onClick={() => setShowForgotModal(true)}
+                onClick={() => {
+                  setForgotEmail(formData.email || '');
+                  setForgotSuccess('');
+                  setForgotError('');
+                  setDebugResetLink('');
+                  setShowForgotModal(true);
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -449,46 +460,196 @@ export const LoginPage = () => {
         <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(5px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '1rem',
+          padding: '1.25rem',
           zIndex: 100,
         }}>
           <div style={{
             backgroundColor: '#FFFFFF',
             borderRadius: '24px',
             padding: '2rem',
-            maxWidth: '400px',
+            maxWidth: '440px',
             width: '100%',
             position: 'relative',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
           }}>
             <button
+              type="button"
               onClick={() => setShowForgotModal(false)}
-              style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              style={{ position: 'absolute', top: '1.2rem', right: '1.2rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
             >
               <X size={20} />
             </button>
 
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#DCFCE7', color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
-                <KeyRound size={22} />
+              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#DCFCE7', color: '#15803D', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <KeyRound size={24} />
               </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#073B1E' }}>Password Recovery</h3>
-              <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '0.25rem' }}>
-                Password recovery is managed by your system administrator. Contact support@cardalink.com for assistance.
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#073B1E', margin: 0 }}>Forgot Password</h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '0.35rem' }}>
+                Enter your registered email address and we'll send you a secure link to reset your password.
               </p>
             </div>
 
-            <button
-              onClick={() => setShowForgotModal(false)}
-              className="btn btn-secondary"
-              style={{ width: '100%' }}
-            >
-              Got it
-            </button>
+            {forgotError && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#FEF2F2',
+                border: '1px solid #FECACA',
+                borderRadius: '12px',
+                color: '#DC2626',
+                fontSize: '0.825rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1rem'
+              }}>
+                <AlertCircle size={16} />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess ? (
+              <div>
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  borderRadius: '12px',
+                  color: '#15803D',
+                  fontSize: '0.875rem',
+                  lineHeight: '1.5',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.65rem',
+                  marginBottom: '1.25rem'
+                }}>
+                  <CheckCircle2 size={18} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ display: 'block', marginBottom: '0.2rem' }}>Reset Link Dispatched!</strong>
+                    <span>{forgotSuccess}</span>
+                  </div>
+                </div>
+
+                {debugResetLink && (
+                  <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+                    <a
+                      href={debugResetLink}
+                      style={{
+                        display: 'inline-block',
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#E0F2FE',
+                        color: '#0369A1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      🔗 Click here to Open Reset Link directly
+                    </a>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#16A34A',
+                    color: '#FFF',
+                    border: 'none',
+                    padding: '0.8rem',
+                    borderRadius: '12px',
+                    fontWeight: '800',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back to Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!forgotEmail || !forgotEmail.includes('@')) {
+                  setForgotError('Please enter a valid email address.');
+                  return;
+                }
+                setForgotLoading(true);
+                setForgotError('');
+                setForgotSuccess('');
+                try {
+                  const res = await forgotPasswordApi({ email: forgotEmail });
+                  setForgotSuccess(res.message || 'Password reset link sent! Please check your email inbox.');
+                  if (res.data?.reset_link) {
+                    setDebugResetLink(res.data.reset_link);
+                  }
+                } catch (err) {
+                  setForgotError(err.message || 'Failed to send password reset email. Please try again.');
+                } finally {
+                  setForgotLoading(false);
+                }
+              }}>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '800', color: '#2D3748', display: 'block', marginBottom: '0.4rem' }}>
+                    Your Email Address *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. farmer@cardalink.com"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 0.85rem 0.75rem 2.5rem',
+                        borderRadius: '12px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.88rem',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#16A34A',
+                    color: '#FFF',
+                    border: 'none',
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    fontWeight: '800',
+                    fontSize: '0.92rem',
+                    cursor: forgotLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)',
+                    opacity: forgotLoading ? 0.7 : 1
+                  }}
+                >
+                  {forgotLoading ? 'Sending Reset Link...' : 'Send Reset Link'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.825rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Remember your password? Back to Login
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
